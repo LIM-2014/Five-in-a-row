@@ -2,166 +2,131 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>마스터 오목: 리얼 사운드 에디션</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+<title>마스터 오목: 렌주룰 에디션</title>
 <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
 <style>
-  body { margin: 0; background: #e9d6a7; font-family: 'Pretendard', system-ui, sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; overflow: hidden; }
-  #startModal, #resultModal, #historyModal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.6); z-index: 9999; }
-  #resultModal, #historyModal { display: none; z-index: 10000; }
-  .box { background: #fff; width: 340px; padding: 25px; border-radius: 22px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center; position: relative; }
-  .title { font-weight: 800; font-size: 1.3rem; margin-bottom: 15px; }
-  .btn { width: 100%; padding: 12px; margin: 5px 0; border-radius: 12px; border: 1px solid #eee; background: #f9f9f9; font-weight: 600; cursor: pointer; transition: 0.2s; font-size: 14px; }
-  .btn.active { background: #2f6fed; color: #fff; border: none; }
+  :root { --bg: #e9d6a7; --primary: #2f6fed; --dark: #333; --danger: #e74c3c; }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  body { margin: 0; background: var(--bg); font-family: 'Pretendard', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh; overflow: hidden; touch-action: none; }
+  
+  #startModal, #historyModal, #finishConfirmModal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 9999; padding: 20px; }
+  #historyModal, #finishConfirmModal { display: none; }
+  
+  .box { background: #fff; width: 100%; max-width: 340px; padding: 25px; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center; }
+  .title { font-weight: 800; font-size: 1.4rem; margin-bottom: 20px; color: var(--dark); }
+  
+  .btn { width: 100%; padding: 14px; margin: 6px 0; border-radius: 12px; border: 1px solid #eee; background: #f9f9f9; font-weight: 700; cursor: pointer; font-size: 15px; transition: 0.2s; }
+  .btn.active { background: var(--primary); color: #fff; border: none; }
   .btn.sub { background: #555; color: #fff; border: none; margin-top: 10px; }
   
-  #levelContainer { position: relative; margin-top: 10px; border-radius: 12px; overflow: hidden; }
-  #levelOverlay { position: absolute; inset: 0; background: rgba(200, 200, 200, 0.6); display: none; z-index: 10; cursor: not-allowed; }
-
-  .wrapper { position: relative; display: flex; flex-direction: column; align-items: center; gap: 15px; }
-  canvas { background: linear-gradient(135deg,#d8a45d,#c8924a); border: 4px solid #4a3419; border-radius: 12px; cursor: pointer; }
+  .option-group { display: flex; gap: 8px; margin-bottom: 12px; }
+  .option-group .btn { padding: 10px 5px; font-size: 13px; margin: 0; }
+  #aiOptions.disabled { opacity: 0.3; pointer-events: none; filter: grayscale(1); }
   
-  .info-bar { display: flex; gap: 15px; margin-bottom: 5px; align-items: center; }
-  .timer-box { background: rgba(0,0,0,0.8); color: #fff; padding: 8px 12px; border-radius: 15px; font-family: monospace; font-size: 16px; min-width: 70px; text-align: center; border: 2px solid transparent; }
-  .timer-box.active { border-color: #2f6fed; box-shadow: 0 0 10px #2f6fed; transform: scale(1.05); }
-  .status { background: #333; color: #fff; padding: 8px 15px; border-radius: 20px; font-size: 13px; font-weight: bold; min-width: 150px; text-align: center; }
+  .wrapper { position: relative; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 600px; padding: 10px; }
+  canvas { background: linear-gradient(135deg,#d8a45d,#c8924a); border: 4px solid #4a3419; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none; cursor: default; }
   
-  .control-panel { display: flex; gap: 10px; width: 100%; margin-top: 5px; }
-  .sound-toggle { position: absolute; top: 20px; right: 20px; font-size: 20px; cursor: pointer; background: white; border-radius: 50%; width: 40px; height: 40px; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 10px rgba(0,0,0,0.1); }
+  .info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; justify-content: space-between; align-items: center; }
+  .timer-box { background: rgba(0,0,0,0.85); color: #fff; padding: 8px 14px; border-radius: 12px; font-family: monospace; font-size: 16px; min-width: 75px; text-align: center; border: 2px solid transparent; }
+  .timer-box.active { border-color: var(--primary); }
   
-  .history-item { background: #f0f0f0; padding: 10px; border-radius: 10px; margin-bottom: 8px; text-align: left; font-size: 12px; position: relative; }
-  .history-del { position: absolute; right: 10px; top: 10px; color: #e74c3c; cursor: pointer; font-weight: bold; }
+  .status { flex: 1; background: var(--dark); color: #fff; padding: 10px; border-radius: 20px; font-size: 13px; font-weight: bold; text-align: center; }
+  .status.forbidden { background: var(--danger); animation: shake 0.4s; }
+  
+  @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-5px); } 75% { transform: translateX(5px); } }
+  
+  .control-panel { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
+  #mainGoBtn { display: none; background: var(--dark); color: white; border: none; }
+  
+  .history-list { max-height: 280px; overflow-y: auto; margin-bottom: 15px; }
+  .history-item { background: #f8f9fa; padding: 14px; border-radius: 12px; margin-bottom: 10px; text-align: left; font-size: 13px; cursor: pointer; border: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+  .history-del { width: 32px; height: 32px; line-height: 32px; text-align: center; background: #ffeded; color: #e74c3c; border-radius: 8px; font-weight: bold; }
 </style>
 </head>
 <body>
 
 <div id="startModal">
   <div class="box">
-    <div class="sound-toggle" id="soundToggleStart" onclick="toggleSound()">🔊</div>
-    <div class="title">오목 마스터</div>
-    <button class="btn active" id="aiBtn" onclick="selectMode('ai')">AI 대전</button>
-    <button class="btn" id="friendBtn" onclick="selectMode('friend')">친구 대전</button>
-    <div id="levelContainer">
-        <div id="levelOverlay"></div>
-        <div style="height:1px; background:#eee; margin:10px 0;"></div>
-        <div id="levelBox">
+    <div class="title">렌주룰 에디션</div>
+    <div class="option-group">
+        <button class="btn active" id="aiBtn" onclick="selectMode('ai')">AI 대전</button>
+        <button class="btn" id="friendBtn" onclick="selectMode('friend')">친구 대전</button>
+    </div>
+    <div id="aiOptions">
+        <div class="option-group">
+            <button class="btn active" id="colorBlack" onclick="selectColor(1)">흑 (금수 있음)</button>
+            <button class="btn" id="colorWhite" onclick="selectColor(2)">백 (자유)</button>
+        </div>
+        <div class="option-group">
           <button class="btn active" id="easyBtn" onclick="setLevel('easy')">초보</button>
           <button class="btn" id="midBtn" onclick="setLevel('medium')">중수</button>
           <button class="btn" id="hardBtn" onclick="setLevel('hard')">고수</button>
         </div>
     </div>
-    <button class="btn sub" onclick="showHistory()">최근 기보 보기</button>
-    <button class="btn active" style="background:#333; margin-top:15px;" onclick="startGame()">게임 시작</button>
+    <button class="btn sub" onclick="showHistory()">최근 기보 (최대 5개)</button>
+    <button class="btn active" style="background:var(--dark); margin-top:15px;" onclick="startGame()">게임 시작</button>
   </div>
 </div>
 
 <div id="historyModal">
   <div class="box">
-    <div class="title">최근 기보</div>
-    <div id="historyList"></div>
+    <div class="title">기보 리스트</div>
+    <div id="historyList" class="history-list"></div>
     <button class="btn active" onclick="closeHistory()">닫기</button>
   </div>
 </div>
 
-<div id="resultModal">
-  <div class="box">
+<div id="finishConfirmModal">
+  <div class="box" style="max-width: 280px;">
     <div class="title">게임 종료</div>
-    <div id="resultContent" style="margin-bottom:20px; font-size:1.1rem;"></div>
-    <button class="btn active" onclick="location.reload()">다시 하기</button>
+    <div id="finishResultText" style="margin-bottom:20px; font-weight: bold; color: var(--primary); font-size: 1.2rem;"></div>
+    <button class="btn active" onclick="viewRecord()">기보 확인하기</button>
   </div>
 </div>
 
 <div class="wrapper">
-  <div class="sound-toggle" style="position:fixed; top:20px; right:20px;" id="soundToggleGame" onclick="toggleSound()">🔊</div>
   <div class="info-bar">
     <div id="timer1" class="timer-box">00:00</div>
-    <div id="status" class="status">흑 차례</div>
+    <div id="status" class="status">준비</div>
     <div id="timer2" class="timer-box">00:00</div>
   </div>
   <canvas id="c" width="600" height="600"></canvas>
   <div class="control-panel">
-      <button class="btn" style="flex:1; margin:0;" onclick="undo()">무르기</button>
-      <button class="btn" style="flex:1; margin:0;" onclick="location.reload()">항복/재시작</button>
+      <button id="undoBtn" class="btn" style="flex:1;" onclick="undo()">무르기</button>
+      <button id="giveUpBtn" class="btn" style="flex:1;" onclick="location.reload()">항복</button>
+      <button id="mainGoBtn" class="btn" style="flex:1;" onclick="location.reload()">메인으로</button>
   </div>
 </div>
 
 <script>
-let mode = "ai", level = "easy", board = [], turn = 1, isGameOver = false, lastMove = null;
-let timers = [0, 0], timerInterval;
-let moveHistory = [];
-let soundEnabled = true;
-const SIZE = 15, c = document.getElementById("c"), ctx = c.getContext("2d"), cell = c.width / (SIZE + 1);
+let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
+let timers=[0,0], timerInterval, moveHistory=[];
+const SIZE=15, c=document.getElementById("c"), ctx=c.getContext("2d"), cell = 600 / 16;
 
-// 리얼 오목 사운드 합성기
-const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-function playStoneSound() {
-  if(!soundEnabled) return;
-  if(audioCtx.state === 'suspended') audioCtx.resume();
-
-  const now = audioCtx.currentTime;
-  
-  // 1. 타격음 (어택)
-  const osc1 = audioCtx.createOscillator();
-  const gain1 = audioCtx.createGain();
-  osc1.type = 'triangle';
-  osc1.frequency.setValueAtTime(150, now);
-  osc1.frequency.exponentialRampToValueAtTime(40, now + 0.1);
-  gain1.gain.setValueAtTime(0.5, now);
-  gain1.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
-  osc1.connect(gain1);
-  gain1.connect(audioCtx.destination);
-
-  // 2. 나무판 공명음 (고음역 클릭)
-  const osc2 = audioCtx.createOscillator();
-  const gain2 = audioCtx.createGain();
-  osc2.type = 'sine';
-  osc2.frequency.setValueAtTime(800, now);
-  osc2.frequency.exponentialRampToValueAtTime(600, now + 0.05);
-  gain2.gain.setValueAtTime(0.2, now);
-  gain2.gain.exponentialRampToValueAtTime(0.01, now + 0.05);
-  osc2.connect(gain2);
-  gain2.connect(audioCtx.destination);
-
-  osc1.start(); osc1.stop(now + 0.1);
-  osc2.start(); osc2.stop(now + 0.05);
-}
-
-function toggleSound() {
-    soundEnabled = !soundEnabled;
-    const icon = soundEnabled ? "🔊" : "🔇";
-    document.getElementById("soundToggleStart").innerText = icon;
-    document.getElementById("soundToggleGame").innerText = icon;
-}
-
-function selectMode(m) {
-  mode = m;
-  document.getElementById("aiBtn").classList.toggle("active", m==='ai');
-  document.getElementById("friendBtn").classList.toggle("active", m==='friend');
-  document.getElementById("levelOverlay").style.display = (m === 'friend') ? "block" : "none";
-}
-
-function setLevel(l) {
-  if(mode !== 'ai') return;
-  level = l;
-  document.querySelectorAll("#levelBox .btn").forEach(b => b.classList.remove("active"));
-  document.getElementById(l === 'medium' ? 'midBtn' : l + 'Btn').classList.add("active");
-}
+function selectMode(m){ mode=m; document.getElementById("aiBtn").classList.toggle("active", m==='ai'); document.getElementById("friendBtn").classList.toggle("active", m==='friend'); document.getElementById("aiOptions").classList.toggle("disabled", m==='friend'); }
+function selectColor(c){ playerColor=c; document.getElementById("colorBlack").classList.toggle("active", c===1); document.getElementById("colorWhite").classList.toggle("active", c===2); }
+function setLevel(l){ level=l; ['easy','mid','hard'].forEach(id => { const el = document.getElementById(id+'Btn'); if(el) el.classList.remove('active'); }); document.getElementById(l==='medium'?'midBtn':l+'Btn').classList.add('active'); }
 
 function startGame() {
   board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-  timers = [0, 0]; moveHistory = []; isGameOver = false; turn = 1;
-  document.getElementById("startModal").style.display = "none";
-  clearInterval(timerInterval);
-  timerInterval = setInterval(() => { timers[turn-1]++; updateTimerUI(); }, 1000);
-  draw();
+  timers=[0,0]; moveHistory=[]; isGameOver=false; turn=1;
+  document.getElementById("startModal").style.display="none";
+  document.getElementById("mainGoBtn").style.display="none";
+  document.getElementById("undoBtn").style.display="flex";
+  document.getElementById("giveUpBtn").style.display="flex";
+  if(timerInterval) clearInterval(timerInterval);
+  timerInterval = setInterval(()=> { timers[turn-1]++; updateTimerUI(); }, 1000);
+  draw(); updateStatus();
+  if(mode==="ai" && playerColor===2) setTimeout(aiMove, 600);
 }
 
-function updateTimerUI() {
-  for(let i=0; i<2; i++) {
-    let m = Math.floor(timers[i]/60), s = timers[i]%60;
-    document.getElementById(`timer${i+1}`).innerText = `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    document.getElementById(`timer${i+1}`).classList.toggle("active", turn === i+1);
-  }
+function updateStatus(msg){
+  const s=document.getElementById("status"); if(isGameOver) return;
+  s.classList.remove("forbidden");
+  if(msg) { s.innerText = msg; s.classList.add("forbidden"); return; }
+  if(mode==="ai") s.innerText=(turn!==playerColor)?"AI 생각 중...":`내 차례 (${turn===1?'흑':'백'})`;
+  else s.innerText=turn===1?"흑 차례 (금수 주의)":"백 차례 (자유)";
 }
 
 function draw() {
@@ -171,173 +136,192 @@ function draw() {
     ctx.beginPath(); ctx.moveTo(cell,i*cell); ctx.lineTo(SIZE*cell,i*cell); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(i*cell,cell); ctx.lineTo(i*cell,SIZE*cell); ctx.stroke();
   }
-  [4,8,12].forEach(y=>[4,8,12].forEach(x=>{
-    ctx.beginPath(); ctx.arc(x*cell,y*cell,4,0,Math.PI*2); ctx.fillStyle="#4a3419"; ctx.fill();
-  }));
+  [4, 8, 12].forEach(y => [4, 8, 12].forEach(x => { ctx.beginPath(); ctx.arc(x*cell, y*cell, 4, 0, Math.PI*2); ctx.fillStyle="#4a3419"; ctx.fill(); }));
   for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
-  if(lastMove){ ctx.fillStyle="#ff4d4d"; ctx.beginPath(); ctx.arc((lastMove.x+1)*cell,(lastMove.y+1)*cell,5,0,Math.PI*2); ctx.fill(); }
+  if(isGameOver) {
+    moveHistory.forEach((m,i)=>{
+      ctx.font="bold 15px Arial"; ctx.textAlign="center"; ctx.textBaseline="middle";
+      ctx.fillStyle=m.p===1?"#fff":"#000"; ctx.fillText(i+1,(m.x+1)*cell,(m.y+1)*cell);
+    });
+  } else if(lastMove){
+    ctx.fillStyle="#ff4d4d"; ctx.beginPath(); ctx.arc((lastMove.x+1)*cell,(lastMove.y+1)*cell,6,0,Math.PI*2); ctx.fill();
+  }
 }
 
-function drawStone(x,y,p) {
+function drawStone(x,y,p){
   const px=(x+1)*cell, py=(y+1)*cell;
   const grad=ctx.createRadialGradient(px-cell*0.15, py-cell*0.15, cell*0.05, px, py, cell*0.4);
   if(p===1){ grad.addColorStop(0,"#666"); grad.addColorStop(1,"#000"); }
   else { grad.addColorStop(0,"#fff"); grad.addColorStop(1,"#ccc"); }
-  ctx.beginPath(); ctx.arc(px,py,cell*0.42,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
-  if(p===2){ ctx.strokeStyle="#bbb"; ctx.stroke(); }
+  ctx.beginPath(); ctx.arc(px,py,cell*0.43,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+  if(p===2){ ctx.strokeStyle="#bbb"; ctx.lineWidth=0.5; ctx.stroke(); }
 }
 
-c.onclick=(e)=>{
-  if(isGameOver || (mode==="ai" && turn===2)) return;
-  const rect=c.getBoundingClientRect(), x=Math.round((e.clientX-rect.left)/cell)-1, y=Math.round((e.clientY-rect.top)/cell)-1;
-  if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0){
-    if(turn === 1 && isForbidden(x, y)) { document.getElementById("status").innerText = "⚠️ 금수(3-3) 위치!"; return; }
+// 렌주룰 금수 체크
+function checkForbidden(x, y) {
+  if(turn !== 1) return false;
+  board[y][x] = 1;
+  let res = false;
+  if (isOverline(x, y)) res = "장주(6목) 금수!";
+  else if (countFours(x, y) >= 2) res = "4-4 금수!";
+  else if (countOpenThrees(x, y) >= 2) res = "3-3 금수!";
+  board[y][x] = 0;
+  return res;
+}
+
+function isOverline(x, y) {
+  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx, dy] of dirs) {
+    let cnt = 1;
+    for(let i=1; i<7; i++) if(board[y+dy*i]?.[x+dx*i]===1) cnt++; else break;
+    for(let i=1; i<7; i++) if(board[y-dy*i]?.[x-dx*i]===1) cnt++; else break;
+    if(cnt > 5) return true;
+  }
+  return false;
+}
+
+function countFours(x, y) {
+  let fours = 0; const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx, dy] of dirs) {
+    let cnt = 1;
+    for(let i=1; i<5; i++) if(board[y+dy*i]?.[x+dx*i]===1) cnt++; else break;
+    for(let i=1; i<5; i++) if(board[y-dy*i]?.[x-dx*i]===1) cnt++; else break;
+    if(cnt === 4) fours++;
+  }
+  return fours;
+}
+
+function countOpenThrees(x, y) {
+  let openThrees = 0; const dirs = [[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx, dy] of dirs) {
+    let cnt = 1;
+    for(let i=1; i<4; i++) if(board[y+dy*i]?.[x+dx*i]===1) cnt++; else break;
+    for(let i=1; i<4; i++) if(board[y-dy*i]?.[x-dx*i]===1) cnt++; else break;
+    if(cnt === 3) {
+      let headX=x+dx*(findSide(x,y,dx,dy,1)), headY=y+dy*(findSide(x,y,dx,dy,1));
+      let tailX=x-dx*(findSide(x,y,-dx,-dy,1)), tailY=y-dy*(findSide(x,y,-dx,-dy,1));
+      if(board[headY]?.[headX] === 0 && board[tailY]?.[tailX] === 0) openThrees++;
+    }
+  }
+  return openThrees;
+}
+
+function findSide(x,y,dx,dy,p) { let i=1; while(board[y+dy*i]?.[x+dx*i]===p) i++; return i; }
+
+function handleInput(e) {
+  if(isGameOver || (mode==="ai" && turn!==playerColor)) return;
+  const rect = c.getBoundingClientRect();
+  const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+  const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+  const scale = 600 / rect.width;
+  const x = Math.round(((clientX - rect.left) * scale) / cell) - 1;
+  const y = Math.round(((clientY - rect.top) * scale) / cell) - 1;
+  if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) {
+    const forbidden = checkForbidden(x, y);
+    if(forbidden) { updateStatus(forbidden); setTimeout(()=>updateStatus(),1200); return; }
     placeStone(x,y);
   }
-};
+}
+
+c.addEventListener('mousedown', handleInput);
+c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
 
 function placeStone(x,y){
-  playStoneSound();
-  board[y][x]=turn; 
-  lastMove={x,y}; 
-  moveHistory.push({x, y, p: turn});
-  draw();
-  
-  if(checkWin(x,y,turn)){ setTimeout(() => endGame(turn), 50); return; }
-  turn=3-turn;
-  
-  if(mode === "ai" && turn === 2) {
-    document.getElementById("status").innerText = "백 차례 (AI 생각 중...)";
-    setTimeout(aiMove, Math.floor(Math.random() * 501) + 500);
-  } else {
-    document.getElementById("status").innerText = turn === 1 ? "흑 차례" : "백 차례";
-  }
-  updateTimerUI();
+  board[y][x]=turn; lastMove={x,y}; moveHistory.push({x,y,p:turn}); draw();
+  if(checkWin(x,y,turn)){ endGame(turn); return; }
+  turn=3-turn; updateStatus(); updateTimerUI();
+  if(mode==="ai" && turn!==playerColor) setTimeout(aiMove, 600);
 }
-
-function undo() {
-    if(moveHistory.length === 0 || isGameOver) return;
-    let steps = (mode === "ai" && turn === 1) ? 2 : 1;
-    for(let i=0; i<steps; i++) {
-        let last = moveHistory.pop();
-        if(last) board[last.y][last.x] = 0;
-    }
-    lastMove = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
-    if(mode !== "ai" || steps === 1) turn = 3 - turn;
-    document.getElementById("status").innerText = turn === 1 ? "흑 차례" : "백 차례";
-    draw();
-}
-
-function checkWin(x, y, t) {
-  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
-  for (let [dx, dy] of dirs) {
-    let count = 1;
-    for (let i=1; i<6; i++) if (board[y+dy*i]?.[x+dx*i] === t) count++; else break;
-    for (let i=1; i<6; i++) if (board[y-dy*i]?.[x-dx*i] === t) count++; else break;
-    if (t === 1 && count === 5) return true;
-    if (t === 2 && count >= 5) return true;
-  }
-  return false;
-}
-
-function isForbidden(x, y) {
-  board[y][x] = 1;
-  let openThrees = 0;
-  const dirs = [[1,0],[0,1],[1,1],[1,-1]];
-  for(let [dx,dy] of dirs) {
-    let count = 1;
-    for(let i=1;i<7;i++) if(board[y+dy*i]?.[x+dx*i]===1) count++; else break;
-    for(let i=1;i<7;i++) if(board[y-dy*i]?.[x-dx*i]===1) count++; else break;
-    if(count > 5) { board[y][x]=0; return true; }
-  }
-  for(let [dx,dy] of dirs) if (checkOpenThree(x, y, dx, dy)) openThrees++;
-  board[y][x] = 0;
-  return openThrees >= 2;
-}
-
-function checkOpenThree(x, y, dx, dy) {
-  for (let i = -4; i <= 0; i++) {
-    let segment = [];
-    for (let j = 0; j < 6; j++) {
-      let nx = x + (i + j) * dx, ny = y + (i + j) * dy;
-      if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) segment.push(board[ny][nx]);
-      else segment.push(-1);
-    }
-    let s = segment.join("");
-    if (s === "011100" || s === "001110" || s === "010110" || s === "011010") return true;
-  }
-  return false;
-}
-
-function endGame(winner) {
-  isGameOver = true; clearInterval(timerInterval);
-  saveHistory(winner);
-  const content = document.getElementById("resultContent");
-  if(mode === "ai") {
-    if(winner === 1) {
-      content.innerHTML = `<span class="win-text">🎉 승리하셨습니다!</span>`;
-      confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-    } else {
-      content.innerHTML = `<span class="lose-text">패배하셨습니다.</span>`;
-    }
-  } else {
-    content.innerHTML = `<span>${winner===1?'흑돌':'백돌'} 승리!</span>`;
-    confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-  }
-  document.getElementById("resultModal").style.display = "flex";
-}
-
-function saveHistory(winner) {
-    let history = JSON.parse(localStorage.getItem("omok_history") || "[]");
-    let result = { id: Date.now(), date: new Date().toLocaleString(), winner: winner === 1 ? '흑' : '백', mode: mode === 'ai' ? 'AI' : '친구', moves: moveHistory.length };
-    history.unshift(result);
-    if(history.length > 3) history = history.slice(0, 3);
-    localStorage.setItem("omok_history", JSON.stringify(history));
-}
-
-function showHistory() {
-    let history = JSON.parse(localStorage.getItem("omok_history") || "[]");
-    let list = document.getElementById("historyList");
-    list.innerHTML = history.length ? "" : "<p style='font-size:13px; color:#999;'>기보가 없습니다.</p>";
-    history.forEach(item => {
-        list.innerHTML += `<div class="history-item"><strong>${item.date}</strong><br>결과: ${item.winner} 승 (${item.mode}) / ${item.moves}수<span class="history-del" onclick="deleteHistory(${item.id})">삭제</span></div>`;
-    });
-    document.getElementById("historyModal").style.display = "flex";
-}
-
-function deleteHistory(id) {
-    let history = JSON.parse(localStorage.getItem("omok_history") || "[]");
-    history = history.filter(item => item.id !== id);
-    localStorage.setItem("omok_history", JSON.stringify(history));
-    showHistory();
-}
-
-function closeHistory() { document.getElementById("historyModal").style.display = "none"; }
 
 function aiMove() {
   if(isGameOver) return;
-  let best = { x: -1, y: -1, score: -1 };
-  let rand = level==='easy'?0.7:(level==='medium'?0.2:0);
-  for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
-    if (board[y][x]===0) {
-      let s = (getScore(x,y,2)*1.2) + getScore(x,y,1);
-      if (Math.random()<rand) s*=Math.random();
-      if (s>best.score) { best={x,y,score:s}; }
+  let bestX=-1, bestY=-1, maxScore=-1;
+  for(let y=0; y<SIZE; y++) {
+    for(let x=0; x<SIZE; x++) {
+      if(board[y][x]===0) {
+        if(turn===1 && checkForbidden(x,y)) continue;
+        let score = (getPoint(x,y,turn)*1.2) + getPoint(x,y,3-turn);
+        if(level==='easy') score *= (0.5+Math.random());
+        if(score > maxScore) { maxScore=score; bestX=x; bestY=y; }
+      }
     }
   }
-  if(best.x!==-1) placeStone(best.x, best.y);
+  if(bestX!==-1) placeStone(bestX, bestY);
 }
 
-function getScore(x,y,t) {
-  let s=0; const dirs=[[1,0],[0,1],[1,1],[1,-1]];
-  for(let [dx,dy] of dirs){
-    let c=0, b=0;
-    for(let i=1;i<5;i++){ let v=board[y+dy*i]?.[x+dx*i]; if(v===t) c++; else { if(v!==0) b++; break; } }
-    for(let i=1;i<5;i++){ let v=board[y-dy*i]?.[x-dx*i]; if(v===t) c++; else { if(v!==0) b++; break; } }
-    if(c>=4) s+=10000; else if(c===3 && b===0) s+=1000; else if(c===3 && b===1) s+=400;
+function getPoint(x, y, t) {
+  let total = 0; const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx,dy] of dirs) {
+    let count=1, block=0;
+    for(let i=1; i<5; i++){
+      let nx=x+dx*i, ny=y+dy*i;
+      if(nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) { if(board[ny][nx]===t) count++; else { if(board[ny][nx]!==0) block++; break; } } else { block++; break; }
+    }
+    for(let i=1; i<5; i++){
+      let nx=x-dx*i, ny=y-dy*i;
+      if(nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) { if(board[ny][nx]===t) count++; else { if(board[ny][nx]!==0) block++; break; } } else { block++; break; }
+    }
+    if(count>=5) total+=100000; else if(count===4) total+=(block===0?10000:2000); else if(count===3) total+=(block===0?3000:500);
   }
-  return s;
+  return total;
 }
+
+function checkWin(x,y,t){
+  const dirs=[[1,0],[0,1],[1,1],[1,-1]];
+  for(let [dx,dy] of dirs){
+    let c=1;
+    for(let i=1;i<5;i++) if(board[y+dy*i]?.[x+dx*i]===t) c++; else break;
+    for(let i=1;i<5;i++) if(board[y-dy*i]?.[x-dx*i]===t) c++; else break;
+    if(t===1 && c===5) return true;
+    if(t===2 && c>=5) return true;
+  }
+  return false;
+}
+
+function endGame(w){
+  isGameOver=true; clearInterval(timerInterval);
+  saveHistory(w);
+  document.getElementById("finishResultText").innerText=(w===1?'흑':'백')+" 승리!";
+  document.getElementById("finishConfirmModal").style.display="flex";
+  if(w===playerColor || mode!=='ai') confetti({particleCount:100, spread:70, origin:{y:0.6}});
+}
+
+// 기보 저장 (최대 5개 제한)
+function saveHistory(w){
+  let h=JSON.parse(localStorage.getItem("omok_history")||"[]");
+  h.unshift({id: Date.now(), date:new Date().toLocaleString(), winner:w===1?'흑':'백', moves:moveHistory.length, data: [...moveHistory]});
+  localStorage.setItem("omok_history", JSON.stringify(h.slice(0,5))); // 상위 5개만 유지
+}
+
+function showHistory(){
+  let h=JSON.parse(localStorage.getItem("omok_history")||"[]");
+  let list=document.getElementById("historyList");
+  list.innerHTML=h.length?"":"<p style='color:#999; margin-top:20px;'>저장된 기록이 없습니다.</p>";
+  h.forEach((item, index)=>{
+    list.innerHTML+=`
+      <div class="history-item" onclick="replayGame(${index})">
+        <div><strong>${item.date}</strong><br>${item.winner} 승 / ${item.moves}수</div>
+        <span class="history-del" onclick="deleteHistory(event, ${index})">✕</span>
+      </div>`;
+  });
+  document.getElementById("historyModal").style.display="flex";
+}
+
+function deleteHistory(e, index) { e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_history")||"[]"); h.splice(index, 1); localStorage.setItem("omok_history", JSON.stringify(h)); showHistory(); }
+function replayGame(index) {
+    let h=JSON.parse(localStorage.getItem("omok_history")||"[]"); let game = h[index]; if(!game) return;
+    board = Array.from({length:SIZE},()=>Array(SIZE).fill(0)); moveHistory = game.data; isGameOver = true; clearInterval(timerInterval);
+    moveHistory.forEach(m => board[m.y][m.x] = m.p);
+    document.getElementById("historyModal").style.display = "none";
+    document.getElementById("startModal").style.display = "none";
+    document.getElementById("status").innerText = `복기 모드 (${game.moves}수)`;
+    document.getElementById("undoBtn").style.display = "none"; document.getElementById("giveUpBtn").style.display = "none"; document.getElementById("mainGoBtn").style.display = "block";
+    draw();
+}
+function viewRecord(){ document.getElementById("finishConfirmModal").style.display="none"; document.getElementById("undoBtn").style.display="none"; document.getElementById("giveUpBtn").style.display="none"; document.getElementById("mainGoBtn").style.display="block"; document.getElementById("status").innerText=`기보 확인 (${moveHistory.length}수)`; draw(); }
+function closeHistory(){document.getElementById("historyModal").style.display="none";}
+function updateTimerUI(){for(let i=0;i<2;i++){let m=Math.floor(timers[i]/60),s=timers[i]%60;document.getElementById(`timer${i+1}`).innerText=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;document.getElementById(`timer${i+1}`).classList.toggle("active",turn===i+1);}}
+function undo(){if(moveHistory.length===0||isGameOver)return;let steps=(mode==="ai")?2:1;for(let i=0; i<steps; i++){let l=moveHistory.pop();if(l)board[l.y][l.x]=0;}lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;if(mode!=="ai")turn=3-turn;updateStatus();draw();}
 </script>
 </body>
 </html>
