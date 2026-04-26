@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
@@ -16,10 +16,48 @@
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
+        /* 기존 body 수정 */
         body {
-            margin: 0; background: var(--bg); font-family: 'Pretendard', sans-serif;
-            display: flex; align-items: center; justify-content: center;
-            height: 100dvh; overflow: hidden; touch-action: none;
+            margin: 0; 
+            background: var(--bg); 
+            font-family: 'Pretendard', -apple-system, sans-serif;
+            display: flex; 
+            flex-direction: column; /* 세로 방향 정렬 */
+            align-items: center; 
+            justify-content: center; /* 중앙 정렬 */
+            min-height: 100dvh; /* height 대신 min-height 사용 */
+            overflow: hidden; 
+            touch-action: none;
+        }
+
+        /* 푸터 디자인 추가 */
+        footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            padding: 15px 0;
+            background: rgba(0, 0, 0, 0.05); /* 은은한 배경 */
+            backdrop-filter: blur(5px); /* 배경 흐림 효과 */
+            color: #6a5a40; /* 보드 색상과 어울리는 톤 */
+            font-size: 12px;
+            text-align: center;
+            border-top: 1px solid rgba(0, 0, 0, 0.05);
+            line-height: 1.6;
+        }
+        
+        footer a {
+            color: var(--primary);
+            text-decoration: none;
+            font-weight: bold;
+        }
+        
+        footer a:hover {
+            text-decoration: underline;
+        }
+        
+        /* 모바일 대응: 푸터와 보드가 겹치지 않게 래퍼 여백 조정 */
+        .wrapper {
+            padding-bottom: 60px; 
         }
 
         #startModal, #historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal {
