@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-    <title>오목 마스터: AI v2</title>
+    <title>오목 마스터: 렌주룰</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         :root {
@@ -105,7 +105,7 @@
 
 <div id="startModal">
     <div class="box">
-        <div class="title">오목 마스터: AI v2</div>
+        <div class="title">오목 마스터: 렌주룰</div>
         <div class="option-group">
             <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
             <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>
@@ -171,7 +171,7 @@
 <div class="wrapper">
     <div class="info-bar">
         <div id="timer1" class="timer-box">∞</div>
-        <div id="status" class="status">오목 마스터: AI v2</div>
+        <div id="status" class="status">오목 마스터: 렌주룰</div>
         <div id="timer2" class="timer-box">∞</div>
     </div>
     <canvas id="c" width="600" height="600"></canvas>
@@ -183,9 +183,10 @@
 </div>
 
 <script>
+    // 기본 설정을 'easy'로 변경
     let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
     let currentLimit=20, timerInterval, moveHistory=[], undoCount=0, endReason="";
-    let statusTimeout = null; // 메시지 유지용 타이머
+    let statusTimeout = null;
     const SIZE=15, c=document.getElementById("c"), ctx=c.getContext("2d"), cell = 600 / 16;
 
     function updateUI() {
@@ -195,9 +196,12 @@
         const aiOpts = document.getElementById("aiOptions");
         if(mode === 'friend') aiOpts.classList.add("disabled");
         else aiOpts.classList.remove("disabled");
+        
+        // 버튼 색상 업데이트
         document.getElementById("startBtn").style.background = isImp ? "var(--impossible)" : "var(--dark)";
         document.getElementById("colorBlack").classList.toggle("active", playerColor===1);
         document.getElementById("colorWhite").classList.toggle("active", playerColor===2);
+        
         ['easy','medium','hard','impossible'].forEach(l => {
             const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
             const el = document.getElementById(id);
@@ -230,7 +234,6 @@
         if (msg) {
             s.innerText = msg;
             if (isPriority) {
-                // 3초 후 기본 상태로 돌아가기 (새 액션에 의해 취소될 수 있음)
                 statusTimeout = setTimeout(() => updateStatus(), 3000);
             }
             return;
@@ -240,8 +243,19 @@
             s.innerText = "AI 생각 중..."; s.classList.add("thinking");
             if (isImp) s.classList.add("imp-text");
         } else {
+            // "금수 주의" 삭제 적용
             s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
         }
+    }
+
+    function setupConfirmBtn(callback) {
+        const oldBtn = document.getElementById("confirmActionBtn");
+        const newBtn = oldBtn.cloneNode(true);
+        oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+        newBtn.onclick = () => {
+            callback();
+            closeActionConfirm();
+        };
     }
 
     function askUndo() {
@@ -253,7 +267,7 @@
         }
         document.getElementById("actionTitle").innerText = "무르기 확인";
         document.getElementById("actionDesc").innerText = `무르기를 사용하시겠습니까?\n(현재 ${undoCount}/3회 사용됨)`;
-        document.getElementById("confirmActionBtn").onclick = () => { undo(); closeActionConfirm(); };
+        setupConfirmBtn(undo);
         document.getElementById("actionConfirmModal").style.display = "flex";
     }
 
@@ -261,7 +275,7 @@
         if (isGameOver) return;
         document.getElementById("actionTitle").innerText = "기권 확인";
         document.getElementById("actionDesc").innerText = "정말로 게임을 기권하시겠습니까?";
-        document.getElementById("confirmActionBtn").onclick = () => { handleGiveUp(); closeActionConfirm(); };
+        setupConfirmBtn(handleGiveUp);
         document.getElementById("actionConfirmModal").style.display = "flex";
     }
 
@@ -325,62 +339,100 @@
         ctx.beginPath(); ctx.arc(px,py,cell*0.43,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
     }
 
-    function checkForbidden(x, y, t) {
+    function checkRenjuForbidden(x, y, t) {
         if (t !== 1) return false;
-        board[y][x] = t;
+        if (checkWinStrict(x, y, 1)) return false;
+        board[y][x] = 1;
         const ds = [[1,0],[0,1],[1,1],[1,-1]];
         for(let [dx, dy] of ds) {
             let count = 1;
-            for(let i=1; i<10; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
-            for(let i=1; i<10; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+            for(let i=1; i<10; i++) if(board[y+dy*i]?.[x+dx*i]===1) count++; else break;
+            for(let i=1; i<10; i++) if(board[y-dy*i]?.[x-dx*i]===1) count++; else break;
             if(count > 5) { board[y][x] = 0; return "장륙 금수"; }
         }
-        let open3 = 0, count4 = 0;
+        let fourCount = 0, openThreeCount = 0;
         for(let [dx, dy] of ds) {
-            const line = getLineString(x, y, dx, dy, t);
-            if (isOpen3(line)) open3++;
-            if (isFour(line)) count4++;
+            if (isRealFour(x, y, dx, dy, 1)) fourCount++;
+            if (isRealOpenThree(x, y, dx, dy, 1)) openThreeCount++;
         }
         board[y][x] = 0;
-        if (open3 >= 2) return "33 금수";
-        if (count4 >= 2) return "44 금수";
+        if (fourCount >= 2) return "44 금수";
+        if (openThreeCount >= 2) return "33 금수";
         return false;
     }
 
-    function getLineString(x, y, dx, dy, t) {
-        let str = "S";
-        for(let i=1; i<6; i++) {
-            let val = board[y+dy*i]?.[x+dx*i];
-            str += (val === undefined ? "O" : (val === 0 ? "E" : (val === t ? "S" : "O")));
+    function isRealFour(x, y, dx, dy, t) {
+        let positions = [];
+        for(let i=-4; i<=4; i++) {
+            let nx = x+dx*i, ny = y+dy*i;
+            if (board[ny]?.[nx] === 0 || (nx===x && ny===y)) {
+                let temp = board[ny][nx]; board[ny][nx] = t;
+                if (checkWinStrict(nx, ny, t)) positions.push({nx, ny});
+                board[ny][nx] = temp;
+            }
         }
-        let pre = "";
-        for(let i=1; i<6; i++) {
-            let val = board[y-dy*i]?.[x-dx*i];
-            pre = (val === undefined ? "O" : (val === 0 ? "E" : (val === t ? "S" : "O"))) + pre;
-        }
-        return pre + str;
+        return positions.length > 0;
     }
 
-    function isOpen3(line) {
-        const cases = ["ESSS EE", "E SSS E", "EE SSS E", "ES SS E", "ESS S E"];
-        return cases.some(c => line.includes(c.replace(/ /g, "")));
+    function isRealOpenThree(x, y, dx, dy, t) {
+        let foundOpenFour = false;
+        for(let i=-4; i<=4; i++) {
+            let nx = x+dx*i, ny = y+dy*i;
+            if (nx === x && ny === y) continue;
+            if (board[ny]?.[nx] === 0) {
+                board[ny][nx] = t;
+                if (isOpenFour(nx, ny, dx, dy, t)) foundOpenFour = true;
+                board[ny][nx] = 0;
+                if (foundOpenFour) break;
+            }
+        }
+        return foundOpenFour;
     }
 
-    function isFour(line) {
-        const cases = ["SSSS"];
-        return cases.some(c => line.includes(c));
+    function isOpenFour(x, y, dx, dy, t) {
+        let count = 1, leftIdx = 0, rightIdx = 0;
+        for(let i=1; i<5; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else { leftIdx = i; break; }
+        for(let i=1; i<5; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else { rightIdx = i; break; }
+        if (count === 4) {
+            let p1 = board[y+dy*leftIdx]?.[x+dx*leftIdx];
+            let p2 = board[y-dy*rightIdx]?.[x-dx*rightIdx];
+            return (p1 === 0 && p2 === 0);
+        }
+        return false;
+    }
+
+    function checkWinStrict(x, y, t) {
+        const ds = [[1,0],[0,1],[1,1],[1,-1]];
+        for(let [dx, dy] of ds) {
+            let count = 1;
+            for(let i=1; i<6; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
+            for(let i=1; i<6; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+            if (t === 1 && count === 5) return true;
+            if (t === 2 && count >= 5) return true;
+        }
+        return false;
     }
 
     function triggerAi() {
         if (isGameOver) return;
-        const delay = 600 + Math.random() * 800;
+
+        // 확률 분포 지연 로직 (1500ms 최빈값)
+        const min = 500, max = 5000, modeVal = 1500;
+        let delay;
+        const u = Math.random();
+        if (u < (modeVal - min) / (max - min)) {
+            delay = min + Math.sqrt(u * (max - min) * (modeVal - min));
+        } else {
+            delay = max - Math.sqrt((1 - u) * (max - min) * (max - modeVal));
+        }
+
         setTimeout(() => {
             let best;
             switch(level) {
-                case 'easy': best = getBestMoveHeuristic(0.7, true); break;
-                case 'medium': best = getBestMoveHeuristic(1.1, false); break;
-                case 'hard': best = getMinimaxMove(1); break;
-                case 'impossible': best = getMinimaxMove(2); break;
+                case 'easy': best = getBestMoveHeuristic(0.6, true); break;
+                case 'medium': best = getBestMoveHeuristic(1.0, false); break;
+                case 'hard': best = getMinimaxMove(3); break;
+                case 'impossible': best = getMinimaxMove(5); break; 
             }
             if (best && best.x !== -1) placeStone(best.x, best.y);
         }, delay);
@@ -396,9 +448,9 @@
         const y = Math.round(((cY - rect.top) * scale) / cell) - 1;
         
         if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) {
-            const forbidden = checkForbidden(x, y, turn);
+            const forbidden = checkRenjuForbidden(x, y, turn);
             if(forbidden) {
-                updateStatus(`⚠️ ${forbidden}입니다!`, true);
+                updateStatus(`⚠️ ${forbidden} (흑 금수)`, true);
                 return;
             }
             placeStone(x,y);
@@ -410,7 +462,7 @@
 
     function placeStone(x,y){
         board[y][x]=turn; lastMove={x,y}; moveHistory.push({x,y,p:turn}); draw();
-        if(checkWin(x,y,turn)){ endGame(turn); return; }
+        if(checkWinStrict(x,y,turn)){ endGame(turn); return; }
         if (moveHistory.length === SIZE * SIZE) {
             isGameOver = true; clearInterval(timerInterval); endReason="무승부";
             document.getElementById("finishResultText").innerText = "무승부";
@@ -418,18 +470,6 @@
             return;
         }
         turn=3-turn; startTurn(); 
-    }
-
-    function checkWin(x,y,t){
-        const ds=[[1,0],[0,1],[1,1],[1,-1]];
-        for(let [dx,dy] of ds){
-            let count=1;
-            for(let i=1;i<5;i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
-            for(let i=1;i<5;i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
-            if(t === 1 && count === 5) return true;
-            if(t === 2 && count >= 5) return true;
-        }
-        return false;
     }
 
     function endGame(w){ 
@@ -520,9 +560,9 @@
         let bX = -1, bY = -1, mS = -1;
         for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
             if (board[y][x] === 0) {
-                if (turn === 1 && checkForbidden(x, y, 1)) continue;
-                let s = getPoint(x, y, turn) + (getPoint(x, y, 3-turn) * dW);
-                if (isRandom) s *= (0.8 + Math.random() * 0.4);
+                if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
+                let s = getPointBetter(x, y, turn) + (getPointBetter(x, y, 3-turn) * dW);
+                if (isRandom) s *= (0.7 + Math.random() * 0.6);
                 if (s > mS) { mS = s; bX = x; bY = y; }
             }
         }
@@ -530,90 +570,141 @@
     }
 
     function getMinimaxMove(depth) {
-        let bestScore = -Infinity; let move = {x: -1, y: -1};
+        let bestScore = -Infinity;
+        let move = {x: -1, y: -1};
         let candidates = [];
+        
+        let winMove = findImmediateWin(turn);
+        if(winMove) return winMove;
+
+        let threatMove = findImmediateWin(3-turn);
+        if(threatMove) return threatMove;
+
         for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
             if(board[y][x] === 0) {
-                if (turn === 1 && checkForbidden(x, y, 1)) continue;
-                let s = getPoint(x, y, turn) + getPoint(x, y, 3-turn);
+                if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
+                
+                let hasNeighbor = false;
+                for(let dy=-2; dy<=2; dy++) {
+                    for(let dx=-2; dx<=2; dx++) {
+                        if(board[y+dy]?.[x+dx]) { hasNeighbor = true; break; }
+                    }
+                    if(hasNeighbor) break;
+                }
+                let centerBonus = (7-Math.abs(7-x) + 7-Math.abs(7-y)) * 10;
+                if (!hasNeighbor && moveHistory.length > 0) continue;
+                
+                let s = getPointBetter(x, y, turn) * 1.5 + getPointBetter(x, y, 3-turn) + centerBonus;
                 candidates.push({x, y, s});
             }
         }
+        
         candidates.sort((a,b) => b.s - a.s);
-        let searchRange = candidates.slice(0, 15); 
+        let searchRange = candidates.slice(0, 15);
+        
         for (let m of searchRange) {
             board[m.y][m.x] = turn;
-            let score = minimax(depth, -Infinity, Infinity, false);
+            let score = minimax(depth - 1, -Infinity, Infinity, false);
             board[m.y][m.x] = 0;
             if (score > bestScore) { bestScore = score; move = m; }
         }
         return move;
     }
 
-    function minimax(depth, alpha, beta, isMaximizing) {
-        if (depth === 0) return evaluate();
+    function findImmediateWin(t) {
+        for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
+            if(board[y][x]===0) {
+                if(t===1 && checkRenjuForbidden(x,y,1)) continue;
+                if(checkWinStrict(x,y,t)) return {x,y};
+            }
+        }
+        return null;
+    }
+
+    function minimax(depth, alpha, beta, isMax) {
+        if (depth === 0) return evaluateBetter();
+        let currTurn = isMax ? turn : 3 - turn;
         let candidates = [];
-        let currTurn = isMaximizing ? turn : 3 - turn;
+        
         for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
             if(board[y][x] === 0) {
-                if (currTurn === 1 && checkForbidden(x, y, 1)) continue;
-                let s = getPoint(x, y, turn) + getPoint(x, y, 3-turn);
+                if (currTurn === 1 && checkRenjuForbidden(x, y, 1)) continue;
+                let s = getPointBetter(x, y, currTurn);
                 candidates.push({x, y, s});
             }
         }
         candidates.sort((a,b) => b.s - a.s);
-        let searchRange = candidates.slice(0, 8);
-        if (isMaximizing) {
-            let maxEval = -Infinity;
+        let searchRange = candidates.slice(0, 5);
+
+        if (isMax) {
+            let maxE = -Infinity;
             for (let m of searchRange) {
                 board[m.y][m.x] = turn;
-                let eval = minimax(depth - 1, alpha, beta, false);
+                if (checkWinStrict(m.x, m.y, turn)) { board[m.y][m.x]=0; return 2000000 + depth; }
+                let ev = minimax(depth-1, alpha, beta, false);
                 board[m.y][m.x] = 0;
-                maxEval = Math.max(maxEval, eval);
-                alpha = Math.max(alpha, eval);
+                maxE = Math.max(maxE, ev);
+                alpha = Math.max(alpha, ev);
                 if (beta <= alpha) break;
             }
-            return maxEval;
+            return maxE;
         } else {
-            let minEval = Infinity;
+            let minE = Infinity;
             for (let m of searchRange) {
                 board[m.y][m.x] = 3 - turn;
-                let eval = minimax(depth - 1, alpha, beta, true);
+                if (checkWinStrict(m.x, m.y, 3-turn)) { board[m.y][m.x]=0; return -2000000 - depth; }
+                let ev = minimax(depth-1, alpha, beta, true);
                 board[m.y][m.x] = 0;
-                minEval = Math.min(minEval, eval);
-                beta = Math.min(beta, eval);
+                minE = Math.min(minE, ev);
+                beta = Math.min(beta, ev);
                 if (beta <= alpha) break;
             }
-            return minEval;
+            return minE;
         }
     }
 
-    function evaluate() {
-        let myScore = 0, opponentScore = 0;
+    function evaluateBetter() {
+        let score = 0;
         for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-            if(board[y][x] === turn) myScore += getPoint(x, y, turn);
-            else if(board[y][x] === 3-turn) opponentScore += getPoint(x, y, 3-turn);
+            if(board[y][x] === turn) score += getPointBetter(x, y, turn);
+            else if(board[y][x] === 3-turn) score -= getPointBetter(x, y, 3-turn) * 1.4;
         }
-        return myScore - (opponentScore * 1.5);
+        return score;
     }
 
-    function getPoint(x, y, t) {
+    function getPointBetter(x, y, t) {
         let total = 0; const ds = [[1, 0], [0, 1], [1, 1], [1, -1]];
         for (let [dx, dy] of ds) {
-            let c = 1, b = 0;
+            let count = 1, openEnds = 0;
             for (let i = 1; i < 5; i++) {
-                let nx = x + dx * i, ny = y + dy * i;
-                if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+                let nx = x+dx*i, ny = y+dy*i;
+                if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
+                    if (board[ny][nx] === t) count++;
+                    else if (board[ny][nx] === 0) { openEnds++; break; }
+                    else break;
+                } else break;
             }
             for (let i = 1; i < 5; i++) {
-                let nx = x - dx * i, ny = y - dy * i;
-                if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+                let nx = x-dx*i, ny = y-dy*i;
+                if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
+                    if (board[ny][nx] === t) count++;
+                    else if (board[ny][nx] === 0) { openEnds++; break; }
+                    else break;
+                } else break;
             }
-            if (c >= 5) total += 100000;
-            else if (c === 4 && b === 0) total += 10000;
-            else if (c === 4 && b === 1) total += 2000;
-            else if (c === 3 && b === 0) total += 3000;
-            else if (c === 3 && b === 1) total += 500;
+            
+            if (count >= 5) total += 1000000;
+            else if (count === 4) {
+                if(openEnds === 2) total += 200000;
+                else if(openEnds === 1) total += 50000;
+            }
+            else if (count === 3) {
+                if(openEnds === 2) total += 10000;
+                else if(openEnds === 1) total += 1000;
+            }
+            else if (count === 2) {
+                if(openEnds === 2) total += 500;
+            }
         }
         return total;
     }
