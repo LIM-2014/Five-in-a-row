@@ -1,337 +1,624 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
-<title>마스터 오목: 파이널 에디션 (무승부 업데이트)</title>
-<script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-<style>
-  :root { --bg: #e9d6a7; --primary: #2f6fed; --dark: #333; --danger: #e74c3c; --impossible: #8e44ad; }
-  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-  body { margin: 0; background: var(--bg); font-family: 'Pretendard', sans-serif; display: flex; align-items: center; justify-content: center; height: 100vh; height: 100dvh; overflow: hidden; touch-action: none; }
-  
-  #startModal, #historyModal, #finishConfirmModal { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: rgba(0,0,0,0.7); z-index: 10000; padding: 20px; }
-  #historyModal, #finishConfirmModal { display: none; }
-  
-  .box { background: #fff; width: 100%; max-width: 340px; padding: 25px; border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center; }
-  .title { font-weight: 800; font-size: 1.4rem; margin-bottom: 20px; color: var(--dark); }
-  
-  .btn { width: 100%; padding: 14px; margin: 6px 0; border-radius: 12px; border: none; background: #f0f0f0; font-weight: 700; cursor: pointer; font-size: 15px; transition: 0.2s; }
-  .btn.active { background: var(--primary); color: #fff; }
-  .btn.active.imp-active { background: var(--impossible) !important; color: #fff; }
-  .btn.danger { background: var(--danger); color: #fff; }
-  .btn.sub { background: #555; color: #fff; margin-top: 10px; }
-  
-  .option-group { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
-  .option-group .btn { padding: 10px 2px; font-size: 11px; margin: 0; flex: 1; min-width: 60px; }
-  
-  .wrapper { position: relative; display: flex; flex-direction: column; align-items: center; width: 100%; max-width: 600px; padding: 10px; }
-  canvas { background: linear-gradient(135deg,#d8a45d,#c8924a); border: 4px solid #4a3419; border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2); width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none; }
-  
-  .info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; justify-content: space-between; align-items: center; }
-  .timer-box { background: rgba(0,0,0,0.85); color: #fff; padding: 8px 14px; border-radius: 12px; font-family: monospace; font-size: 16px; min-width: 75px; text-align: center; border: 2px solid transparent; }
-  .timer-box.active { border-color: var(--primary); }
-  .timer-box.active.imp-border { border-color: var(--impossible); }
-  
-  .status { flex: 1; background: var(--dark); color: #fff; padding: 10px; border-radius: 20px; font-size: 13px; font-weight: bold; text-align: center; transition: 0.3s; border: 2px solid transparent; }
-  .status.thinking { color: var(--primary); border-color: var(--primary); background: #1a1a1a; animation: pulse 1.5s infinite; }
-  .status.thinking.imp-text { color: var(--impossible); border-color: var(--impossible); }
-  
-  @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <title>오목 마스터: AI v2</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <style>
+        :root {
+            --bg: #e9d6a7;
+            --primary: #2f6fed;
+            --dark: #333;
+            --danger: #e74c3c;
+            --impossible: #8e44ad;
+        }
 
-  .history-item { position: relative; background: #f5f5f5; padding: 12px; margin-bottom: 8px; border-radius: 10px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center; }
-  .del-btn { background: #e74c3c; color: #fff; border: none; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-  .control-panel { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
-  #mainGoBtn { display: none; background: var(--dark); color: white; }
-</style>
+        body {
+            margin: 0; background: var(--bg); font-family: 'Pretendard', sans-serif;
+            display: flex; align-items: center; justify-content: center;
+            height: 100dvh; overflow: hidden; touch-action: none;
+        }
+
+        #startModal, #historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal {
+            position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+            background: rgba(0,0,0,0.7); z-index: 10000; padding: 20px;
+        }
+
+        #historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal { display: none; }
+
+        .box {
+            background: #fff; width: 100%; max-width: 340px; padding: 25px;
+            border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center;
+        }
+
+        .title { font-weight: 800; font-size: 1.4rem; margin-bottom: 20px; color: var(--dark); }
+
+        .btn {
+            width: 100%; padding: 14px; margin: 6px 0; border-radius: 12px; border: none;
+            background: #f0f0f0; font-weight: 700; cursor: pointer; font-size: 15px; transition: 0.2s;
+        }
+
+        .btn.active { background: var(--primary); color: #fff; }
+        .btn.active.imp-active { background: var(--impossible) !important; color: #fff; }
+        .btn:disabled { opacity: 0.3; cursor: not-allowed; }
+        .btn.danger { background: var(--danger); color: #fff; }
+        .btn.sub { background: #555; color: #fff; margin-top: 10px; }
+
+        .option-group { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+        .option-group .btn { padding: 10px 2px; font-size: 11px; margin: 0; flex: 1; min-width: 60px; }
+
+        #aiOptions { transition: 0.3s; }
+        #aiOptions.disabled { opacity: 0.3; pointer-events: none; user-select: none; }
+
+        .wrapper {
+            position: relative; display: flex; flex-direction: column; align-items: center;
+            width: 100%; max-width: 600px; padding: 10px;
+        }
+
+        canvas {
+            background: linear-gradient(135deg,#d8a45d,#c8924a); border: 4px solid #4a3419;
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            width: 100%; height: auto; aspect-ratio: 1/1; touch-action: none;
+        }
+
+        .info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; justify-content: space-between; align-items: center; }
+
+        .timer-box {
+            background: rgba(0,0,0,0.85); color: #fff; padding: 8px 14px; border-radius: 12px;
+            font-family: monospace; font-size: 16px; min-width: 75px; text-align: center;
+            border: 2px solid transparent; transition: 0.3s;
+        }
+
+        .timer-box.active { border-color: var(--primary); }
+        .timer-box.active.imp-border { border-color: var(--impossible); }
+        .timer-box.warning { color: var(--danger); border-color: var(--danger); animation: heartBeat 1s infinite; }
+
+        @keyframes heartBeat { 0% { transform: scale(1); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+
+        .status {
+            flex: 1; background: var(--dark); color: #fff; padding: 10px; border-radius: 20px;
+            font-size: 13px; font-weight: bold; text-align: center; transition: 0.3s;
+            border: 2px solid transparent; white-space: nowrap; overflow: hidden;
+        }
+
+        .status.thinking { color: var(--primary); border-color: var(--primary); background: #1a1a1a; animation: pulse 1.5s infinite; }
+        .status.thinking.imp-text { color: var(--impossible); border-color: var(--impossible); }
+
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+
+        .history-item {
+            position: relative; background: #f5f5f5; padding: 12px; margin-bottom: 8px;
+            border-radius: 10px; cursor: pointer; font-size: 13px; display: flex; justify-content: space-between; align-items: center;
+        }
+
+        .del-btn { background: #e74c3c; color: #fff; border: none; padding: 4px 8px; border-radius: 6px; font-size: 11px; cursor: pointer; }
+
+        .control-panel { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
+
+        #mainGoBtn { display: none; background: var(--dark); color: white; }
+    </style>
 </head>
 <body>
 
 <div id="startModal">
-  <div class="box">
-    <div class="title">오목: 파이널 에디션</div>
-    <div class="option-group">
-        <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
-        <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>
-    </div>
-    <div id="aiOptions">
+    <div class="box">
+        <div class="title">오목 마스터: AI v2</div>
         <div class="option-group">
-            <button class="btn active" id="colorBlack" onclick="playerColor=1; updateUI();">흑 (선수)</button>
-            <button class="btn" id="colorWhite" onclick="playerColor=2; updateUI();">백 (후수)</button>
+            <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
+            <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>
         </div>
-        <div class="option-group">
-          <button class="btn active" id="easyBtn" onclick="level='easy'; updateUI();">초보</button>
-          <button class="btn" id="midBtn" onclick="level='medium'; updateUI();">중수</button>
-          <button class="btn" id="hardBtn" onclick="level='hard'; updateUI();">고수</button>
-          <button class="btn" id="impBtn" onclick="level='impossible'; updateUI();">불가능</button>
+        <div id="aiOptions">
+            <div class="option-group">
+                <button class="btn active" id="colorBlack" onclick="playerColor=1; updateUI();">흑 (선수)</button>
+                <button class="btn" id="colorWhite" onclick="playerColor=2; updateUI();">백 (후수)</button>
+            </div>
+            <div class="option-group">
+                <button class="btn active" id="easyBtn" onclick="level='easy'; updateUI();">초보</button>
+                <button class="btn" id="midBtn" onclick="level='medium'; updateUI();">중수</button>
+                <button class="btn" id="hardBtn" onclick="level='hard'; updateUI();">고수</button>
+                <button class="btn" id="impBtn" onclick="level='impossible'; updateUI();">불가능</button>
+            </div>
+        </div>
+        <button class="btn sub" onclick="showHistory()">기보 관리 (최대 5개)</button>
+        <button id="startBtn" class="btn active" style="background:var(--dark); margin-top:15px;" onclick="startGame()">게임 시작</button>
+    </div>
+</div>
+
+<div id="actionConfirmModal">
+    <div class="box" style="max-width: 280px;">
+        <div class="title" id="actionTitle" style="font-size:1.1rem;"></div>
+        <div id="actionDesc" style="margin-bottom:15px; font-size: 14px; color: #666;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn active" id="confirmActionBtn" style="flex:1;">예</button>
+            <button class="btn" style="flex:1; background:#ccc;" onclick="closeActionConfirm()">아니오</button>
         </div>
     </div>
-    <button class="btn sub" onclick="showHistory()">기보 관리 (최대 5개)</button>
-    <button id="startBtn" class="btn active" style="background:var(--dark); margin-top:15px;" onclick="startGame()">게임 시작</button>
-  </div>
 </div>
 
 <div id="historyModal">
-  <div class="box">
-    <div class="title">기보 기록</div>
-    <div id="historyList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px; text-align: left;"></div>
-    <div style="display:flex; gap:5px;">
-      <button class="btn danger" style="flex:1;" onclick="clearAllHistory()">전체 삭제</button>
-      <button class="btn active" style="flex:1;" onclick="document.getElementById('historyModal').style.display='none'">닫기</button>
+    <div class="box">
+        <div class="title">기보 기록</div>
+        <div id="historyList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px; text-align: left;"></div>
+        <div style="display:flex; gap:5px;">
+            <button class="btn danger" style="flex:1;" onclick="openDeleteConfirm()">전체 삭제</button>
+            <button class="btn active" style="flex:1;" onclick="document.getElementById('historyModal').style.display='none'">닫기</button>
+        </div>
     </div>
-  </div>
+</div>
+
+<div id="deleteConfirmModal">
+    <div class="box" style="max-width: 280px;">
+        <div class="title" style="font-size:1.1rem;">기보를 모두 삭제할까요?</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn danger" style="flex:1;" onclick="clearAllHistory()">삭제</button>
+            <button class="btn" style="flex:1; background:#ccc;" onclick="closeDeleteConfirm()">취소</button>
+        </div>
+    </div>
 </div>
 
 <div id="finishConfirmModal">
-  <div class="box" style="max-width: 280px;">
-    <div class="title">게임 종료</div>
-    <div id="finishResultText" style="margin-bottom:20px; font-weight: bold; color: var(--primary); font-size: 1.2rem;"></div>
-    <button id="recordBtn" class="btn active" onclick="viewFinalRecord()">기보 확인 (복기)</button>
-    <button class="btn" style="margin-top:8px;" onclick="location.reload()">메인으로</button>
-  </div>
+    <div class="box" style="max-width: 280px;">
+        <div class="title">게임 종료</div>
+        <div id="finishResultText" style="margin-bottom:20px; font-weight: bold; color: var(--primary); font-size: 1.2rem;"></div>
+        <button id="recordBtn" class="btn active" onclick="viewFinalRecord()">복기 하기</button>
+        <button class="btn" style="margin-top:8px;" onclick="location.reload()">메인으로</button>
+    </div>
 </div>
 
 <div class="wrapper">
-  <div class="info-bar">
-    <div id="timer1" class="timer-box">00:00</div>
-    <div id="status" class="status">준비</div>
-    <div id="timer2" class="timer-box">00:00</div>
-  </div>
-  <canvas id="c" width="600" height="600"></canvas>
-  <div class="control-panel">
-      <button id="undoBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="undo()">무르기</button>
-      <button id="mainGoBtn" class="btn" style="flex:1;" onclick="location.reload()">메인화면</button>
-      <button id="giveUpBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="location.reload()">기권</button>
-  </div>
+    <div class="info-bar">
+        <div id="timer1" class="timer-box">∞</div>
+        <div id="status" class="status">오목 마스터: AI v2</div>
+        <div id="timer2" class="timer-box">∞</div>
+    </div>
+    <canvas id="c" width="600" height="600"></canvas>
+    <div class="control-panel">
+        <button id="undoBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askUndo()">무르기</button>
+        <button id="mainGoBtn" class="btn" style="flex:1;" onclick="location.reload()">메인화면</button>
+        <button id="giveUpBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askGiveUp()">기권</button>
+    </div>
 </div>
 
 <script>
-let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
-let timers=[0,0], timerInterval, moveHistory=[];
-const SIZE=15, c=document.getElementById("c"), ctx=c.getContext("2d"), cell = 600 / 16;
+    let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
+    let currentLimit=20, timerInterval, moveHistory=[], undoCount=0, endReason="";
+    let statusTimeout = null; // 메시지 유지용 타이머
+    const SIZE=15, c=document.getElementById("c"), ctx=c.getContext("2d"), cell = 600 / 16;
 
-function updateUI() {
-    const isImp = (level === 'impossible' && mode === 'ai');
-    document.getElementById("aiBtn").classList.toggle("active", mode==='ai');
-    document.getElementById("friendBtn").classList.toggle("active", mode==='friend');
-    document.getElementById("startBtn").style.background = isImp ? "var(--impossible)" : "var(--dark)";
-    document.getElementById("colorBlack").classList.toggle("active", playerColor===1);
-    document.getElementById("colorWhite").classList.toggle("active", playerColor===2);
-    document.getElementById("aiOptions").style.opacity = mode==='ai' ? "1" : "0.3";
-    ['easy','medium','hard','impossible'].forEach(l => {
-        const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
-        const el = document.getElementById(id);
-        el.classList.toggle("active", level===l);
-        if(l==='impossible') el.classList.toggle("imp-active", level==='impossible' && mode==='ai');
-    });
-}
-
-function startGame() {
-  board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-  timers=[0,0]; moveHistory=[]; isGameOver=false; turn=1;
-  document.getElementById("startModal").style.display="none";
-  document.getElementById("mainGoBtn").style.display="none";
-  document.getElementById("undoBtn").style.display="block";
-  document.getElementById("giveUpBtn").style.display="block";
-  if(timerInterval) clearInterval(timerInterval);
-  timerInterval = setInterval(()=> { timers[turn-1]++; updateTimerUI(); }, 1000);
-  draw(); updateStatus();
-  if(mode==="ai" && playerColor===2) triggerAi();
-}
-
-function updateStatus(msg){
-  const s=document.getElementById("status"); if(isGameOver && !msg) return;
-  const isImp = (level === 'impossible' && mode === 'ai');
-  s.classList.remove("thinking", "imp-text");
-  if(msg) { s.innerText = msg; return; }
-  if(mode==="ai" && turn!==playerColor) { 
-    s.innerText="AI 생각 중..."; 
-    s.classList.add("thinking"); 
-    if(isImp) s.classList.add("imp-text");
-  } else { s.innerText= (turn===1?"흑 차례":"백 차례"); }
-}
-
-function draw() {
-  ctx.clearRect(0,0,c.width,c.height);
-  ctx.strokeStyle="#4a3419"; ctx.lineWidth=1;
-  for(let i=1;i<=SIZE;i++){
-    ctx.beginPath(); ctx.moveTo(cell,i*cell); ctx.lineTo(SIZE*cell,i*cell); ctx.stroke();
-    ctx.beginPath(); ctx.moveTo(i*cell,cell); ctx.lineTo(i*cell,SIZE*cell); ctx.stroke();
-  }
-  [4, 8, 12].forEach(y => [4, 8, 12].forEach(x => { ctx.beginPath(); ctx.arc(x*cell, y*cell, 4, 0, Math.PI*2); ctx.fillStyle="#4a3419"; ctx.fill(); }));
-  for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
-  if(isGameOver) {
-    moveHistory.forEach((m,i)=>{
-      ctx.font="bold 14px Arial"; ctx.textAlign="center"; ctx.textBaseline="middle";
-      ctx.fillStyle=m.p===1?"#fff":"#000";
-      ctx.fillText(i+1,(m.x+1)*cell,(m.y+1)*cell);
-    });
-  } else if(lastMove){
-    ctx.fillStyle= (level==='impossible' && mode==='ai') ? "var(--impossible)" : "#ff4d4d"; 
-    ctx.beginPath(); ctx.arc((lastMove.x+1)*cell,(lastMove.y+1)*cell,6,0,Math.PI*2); ctx.fill();
-  }
-}
-
-function drawStone(x,y,p){
-  const px=(x+1)*cell, py=(y+1)*cell;
-  const grad=ctx.createRadialGradient(px-cell*0.15, py-cell*0.15, cell*0.05, px, py, cell*0.4);
-  if(p===1){ grad.addColorStop(0,"#666"); grad.addColorStop(1,"#000"); }
-  else { grad.addColorStop(0,"#fff"); grad.addColorStop(1,"#ccc"); }
-  ctx.beginPath(); ctx.arc(px,py,cell*0.43,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
-}
-
-function triggerAi() {
-  if (isGameOver) return;
-  updateStatus();
-  let delay = (Math.random() < 0.7) ? 500 + (Math.random() + Math.random()) * 1000 : 2500 + Math.random() * 2500;
-  const startTime = Date.now();
-  setTimeout(() => {
-    const best = getBestMove();
-    const elapsed = Date.now() - startTime;
-    const remaining = Math.max(0, delay - elapsed);
-    setTimeout(() => { if (best.x !== -1) placeStone(best.x, best.y); }, remaining);
-  }, 50); 
-}
-
-function getBestMove() {
-  let bX = -1, bY = -1, mS = -1;
-  let dW = (level==='easy'?0.7:level==='medium'?1.1:level==='hard'?1.5:2.5);
-  for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
-    if (board[y][x]===0) {
-      let s = getPoint(x,y,turn) + (getPoint(x,y,3-turn)*dW);
-      if (level==='easy') s *= (0.6 + Math.random()*0.8);
-      if (s > mS) { mS = s; bX = x; bY = y; }
+    function updateUI() {
+        const isImp = (level === 'impossible' && mode === 'ai');
+        document.getElementById("aiBtn").classList.toggle("active", mode==='ai');
+        document.getElementById("friendBtn").classList.toggle("active", mode==='friend');
+        const aiOpts = document.getElementById("aiOptions");
+        if(mode === 'friend') aiOpts.classList.add("disabled");
+        else aiOpts.classList.remove("disabled");
+        document.getElementById("startBtn").style.background = isImp ? "var(--impossible)" : "var(--dark)";
+        document.getElementById("colorBlack").classList.toggle("active", playerColor===1);
+        document.getElementById("colorWhite").classList.toggle("active", playerColor===2);
+        ['easy','medium','hard','impossible'].forEach(l => {
+            const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
+            const el = document.getElementById(id);
+            el.classList.toggle("active", level===l);
+            if(l==='impossible') el.classList.toggle("imp-active", level==='impossible' && mode==='ai');
+        });
     }
-  }
-  return {x: bX, y: bY};
-}
 
-function getPoint(x, y, t) {
-  let total = 0; const ds = [[1, 0], [0, 1], [1, 1], [1, -1]];
-  for (let [dx, dy] of ds) {
-    let c = 1, b = 0;
-    for (let i = 1; i < 5; i++) {
-      let nx = x + dx * i, ny = y + dy * i;
-      if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+    function startGame() {
+        board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+        moveHistory=[]; isGameOver=false; turn=1; endReason=""; undoCount=0;
+        document.getElementById("startModal").style.display="none";
+        document.getElementById("mainGoBtn").style.display="none";
+        const isImp = (level === 'impossible' && mode === 'ai');
+        const ub = document.getElementById("undoBtn");
+        ub.style.display="block";
+        ub.disabled = isImp;
+        ub.innerText = isImp ? "무르기 불가" : "무르기";
+        document.getElementById("giveUpBtn").style.display="block";
+        startTurn(); draw();
     }
-    for (let i = 1; i < 5; i++) {
-      let nx = x - dx * i, ny = y - dy * i;
-      if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+
+    function updateStatus(msg, isPriority = false) {
+        if (statusTimeout) { clearTimeout(statusTimeout); statusTimeout = null; }
+        const s = document.getElementById("status");
+        if (isGameOver && !msg) return;
+        const isImp = (level === 'impossible' && mode === 'ai');
+        s.classList.remove("thinking", "imp-text");
+
+        if (msg) {
+            s.innerText = msg;
+            if (isPriority) {
+                // 3초 후 기본 상태로 돌아가기 (새 액션에 의해 취소될 수 있음)
+                statusTimeout = setTimeout(() => updateStatus(), 3000);
+            }
+            return;
+        }
+
+        if (mode === "ai" && turn !== playerColor) {
+            s.innerText = "AI 생각 중..."; s.classList.add("thinking");
+            if (isImp) s.classList.add("imp-text");
+        } else {
+            s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
+        }
     }
-    if (c >= 5) total += 100000;
-    else if (c === 4 && b === 0) total += 10000;
-    else if (c === 3 && b === 0) total += 3000;
-  }
-  return total;
-}
 
-function handleInput(e) {
-  if(isGameOver || (mode==="ai" && turn!==playerColor)) return;
-  const rect = c.getBoundingClientRect();
-  const cX = e.touches ? e.touches[0].clientX : e.clientX;
-  const cY = e.touches ? e.touches[0].clientY : e.clientY;
-  const scale = 600 / rect.width;
-  const x = Math.round(((cX - rect.left) * scale) / cell) - 1;
-  const y = Math.round(((cY - rect.top) * scale) / cell) - 1;
-  if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) placeStone(x,y);
-}
+    function askUndo() {
+        if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
+        if (moveHistory.length === 0) return;
+        if (undoCount >= 3) {
+            updateStatus("⚠️ 무르기 제한 초과 (3/3)", true);
+            return;
+        }
+        document.getElementById("actionTitle").innerText = "무르기 확인";
+        document.getElementById("actionDesc").innerText = `무르기를 사용하시겠습니까?\n(현재 ${undoCount}/3회 사용됨)`;
+        document.getElementById("confirmActionBtn").onclick = () => { undo(); closeActionConfirm(); };
+        document.getElementById("actionConfirmModal").style.display = "flex";
+    }
 
-c.addEventListener('mousedown', handleInput);
-c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
+    function askGiveUp() {
+        if (isGameOver) return;
+        document.getElementById("actionTitle").innerText = "기권 확인";
+        document.getElementById("actionDesc").innerText = "정말로 게임을 기권하시겠습니까?";
+        document.getElementById("confirmActionBtn").onclick = () => { handleGiveUp(); closeActionConfirm(); };
+        document.getElementById("actionConfirmModal").style.display = "flex";
+    }
 
-function placeStone(x,y){
-  board[y][x]=turn; lastMove={x,y}; moveHistory.push({x,y,p:turn}); draw();
-  if(checkWin(x,y,turn)){ endGame(turn); return; }
-  
-  // 무승부 체크
-  if (moveHistory.length === SIZE * SIZE) {
-    isGameOver = true; clearInterval(timerInterval);
-    document.getElementById("finishResultText").innerText = "무승부 (판 가득 참)";
-    document.getElementById("finishConfirmModal").style.display = "flex";
-    return;
-  }
+    function closeActionConfirm() { document.getElementById("actionConfirmModal").style.display = "none"; }
 
-  turn=3-turn; updateStatus(); updateTimerUI();
-  if(mode==="ai" && turn!==playerColor) triggerAi();
-}
+    function startTurn() {
+        if (timerInterval) clearInterval(timerInterval);
+        const isImp = (level === 'impossible' && mode === 'ai');
+        if (isImp) {
+            currentLimit = 20; updateTimerUI();
+            if (isGameOver) return;
+            timerInterval = setInterval(() => {
+                currentLimit--; updateTimerUI();
+                if (currentLimit <= 0) { clearInterval(timerInterval); endByTimeout(); }
+            }, 1000);
+        } else updateTimerUI();
+        updateStatus();
+        if (mode === "ai" && turn !== playerColor) triggerAi();
+    }
 
-function checkWin(x,y,t){
-  const ds=[[1,0],[0,1],[1,1],[1,-1]];
-  for(let [dx,dy] of ds){
-    let c=1;
-    for(let i=1;i<5;i++) if(board[y+dy*i]?.[x+dx*i]===t) c++; else break;
-    for(let i=1;i<5;i++) if(board[y-dy*i]?.[x-dx*i]===t) c++; else break;
-    if(c>=5) return true;
-  }
-  return false;
-}
+    function endByTimeout() {
+        const winner = 3 - turn; isGameOver = true; endReason = "시간패";
+        document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 시간초과 패배!";
+        document.getElementById("finishConfirmModal").style.display = "flex";
+        saveHistory(winner, "시간패");
+    }
 
-function endGame(w){ 
-  isGameOver=true; clearInterval(timerInterval); 
-  saveHistory(w);
-  const isImp = (level === 'impossible' && mode === 'ai');
-  document.getElementById("finishResultText").innerText=(w===1?'흑':'백')+" 승리!"; 
-  document.getElementById("finishConfirmModal").style.display="flex"; 
-  document.getElementById("recordBtn").style.background = isImp ? "var(--impossible)" : "var(--primary)";
-  if(w===playerColor || mode!=='ai') confetti({particleCount:150, spread:70, origin:{y:0.6}, colors: isImp ? ['#8e44ad', '#ffffff'] : undefined}); 
-}
+    function handleGiveUp() {
+        if (isGameOver) return;
+        const winner = 3 - turn; isGameOver = true; endReason = "기권패";
+        document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 기권패!";
+        document.getElementById("finishConfirmModal").style.display = "flex";
+        saveHistory(winner, "기권패");
+    }
 
-function saveHistory(w){
-  let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-  h.unshift({date:new Date().toLocaleString(), winner:w===1?'흑':'백', moves:moveHistory.length, data:[...moveHistory], isImp: (level==='impossible' && mode==='ai')});
-  localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0,5)));
-}
+    function draw() {
+        ctx.clearRect(0,0,c.width,c.height);
+        ctx.strokeStyle="#4a3419"; ctx.lineWidth=1;
+        for(let i=1;i<=SIZE;i++){
+            ctx.beginPath(); ctx.moveTo(cell,i*cell); ctx.lineTo(SIZE*cell,i*cell); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(i*cell,cell); ctx.lineTo(i*cell,SIZE*cell); ctx.stroke();
+        }
+        [4, 8, 12].forEach(y => [4, 8, 12].forEach(x => { ctx.beginPath(); ctx.arc(x*cell, y*cell, 4, 0, Math.PI*2); ctx.fillStyle="#4a3419"; ctx.fill(); }));
+        for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
+        if(isGameOver) {
+            moveHistory.forEach((m,i)=>{
+                ctx.font="bold 14px Arial"; ctx.textAlign="center"; ctx.textBaseline="middle";
+                ctx.fillStyle=m.p===1?"#fff":"#000"; ctx.fillText(i+1,(m.x+1)*cell,(m.y+1)*cell);
+            });
+        } else if(lastMove){
+            ctx.fillStyle= (level==='impossible' && mode==='ai') ? "var(--impossible)" : "#ff4d4d"; 
+            ctx.beginPath(); ctx.arc((lastMove.x+1)*cell,(lastMove.y+1)*cell,6,0,Math.PI*2); ctx.fill();
+        }
+    }
 
-function showHistory(){
-  let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-  let list=document.getElementById("historyList");
-  list.innerHTML=h.length?"":"<p style='color:#999;text-align:center;'>기록 없음</p>";
-  h.forEach((item, idx)=>{
-    list.innerHTML+=`<div class="history-item" onclick="replay(${idx})">
-      <div><strong style="color:${item.isImp?'var(--impossible)':'inherit'}">${item.winner} 승</strong> (${item.moves}수)${item.isImp?' [불]':''}<br><small>${item.date.split(',')[1]}</small></div>
-      <button class="del-btn" onclick="deleteHistory(event, ${idx})">삭제</button>
-    </div>`;
-  });
-  document.getElementById("historyModal").style.display="flex";
-}
+    function drawStone(x,y,p){
+        const px=(x+1)*cell, py=(y+1)*cell;
+        const grad=ctx.createRadialGradient(px-cell*0.15, py-cell*0.15, cell*0.05, px, py, cell*0.4);
+        if(p===1){ grad.addColorStop(0,"#666"); grad.addColorStop(1,"#000"); }
+        else { grad.addColorStop(0,"#fff"); grad.addColorStop(1,"#ccc"); }
+        ctx.beginPath(); ctx.arc(px,py,cell*0.43,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
+    }
 
-function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); showHistory(); }
-function clearAllHistory(){ if(confirm("모든 기보를 삭제하시겠습니까?")){ localStorage.removeItem("omok_final_history"); showHistory(); } }
+    function checkForbidden(x, y, t) {
+        if (t !== 1) return false;
+        board[y][x] = t;
+        const ds = [[1,0],[0,1],[1,1],[1,-1]];
+        for(let [dx, dy] of ds) {
+            let count = 1;
+            for(let i=1; i<10; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
+            for(let i=1; i<10; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+            if(count > 5) { board[y][x] = 0; return "장륙 금수"; }
+        }
+        let open3 = 0, count4 = 0;
+        for(let [dx, dy] of ds) {
+            const line = getLineString(x, y, dx, dy, t);
+            if (isOpen3(line)) open3++;
+            if (isFour(line)) count4++;
+        }
+        board[y][x] = 0;
+        if (open3 >= 2) return "33 금수";
+        if (count4 >= 2) return "44 금수";
+        return false;
+    }
 
-function viewFinalRecord(){
-  document.getElementById("finishConfirmModal").style.display="none";
-  document.getElementById("undoBtn").style.display="none";
-  document.getElementById("giveUpBtn").style.display="none";
-  document.getElementById("mainGoBtn").style.display="block";
-  updateStatus("복기 모드: " + moveHistory.length + "수");
-  draw();
-}
+    function getLineString(x, y, dx, dy, t) {
+        let str = "S";
+        for(let i=1; i<6; i++) {
+            let val = board[y+dy*i]?.[x+dx*i];
+            str += (val === undefined ? "O" : (val === 0 ? "E" : (val === t ? "S" : "O")));
+        }
+        let pre = "";
+        for(let i=1; i<6; i++) {
+            let val = board[y-dy*i]?.[x-dx*i];
+            pre = (val === undefined ? "O" : (val === 0 ? "E" : (val === t ? "S" : "O"))) + pre;
+        }
+        return pre + str;
+    }
 
-function replay(idx){
-  let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-  let g = h[idx]; if(!g) return;
-  board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-  moveHistory = g.data; isGameOver = true; clearInterval(timerInterval);
-  moveHistory.forEach(m => board[m.y][m.x] = m.p);
-  document.getElementById("historyModal").style.display = "none";
-  document.getElementById("startModal").style.display = "none";
-  viewFinalRecord();
-}
+    function isOpen3(line) {
+        const cases = ["ESSS EE", "E SSS E", "EE SSS E", "ES SS E", "ESS S E"];
+        return cases.some(c => line.includes(c.replace(/ /g, "")));
+    }
 
-function updateTimerUI(){
-  const isImp = (level === 'impossible' && mode === 'ai');
-  for(let i=0;i<2;i++){
-    let m=Math.floor(timers[i]/60),s=timers[i]%60;
-    const tEl = document.getElementById(`timer${i+1}`);
-    tEl.innerText=`${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;
-    tEl.classList.toggle("active",turn===i+1);
-    tEl.classList.toggle("imp-border", turn===i+1 && isImp);
-  }
-}
-function undo(){if(moveHistory.length===0||isGameOver)return;let s=(mode==="ai")?2:1;for(let i=0; i<s; i++){let l=moveHistory.pop();if(l)board[l.y][l.x]=0;}lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;if(mode!=="ai")turn=3-turn;updateStatus();draw();}
+    function isFour(line) {
+        const cases = ["SSSS"];
+        return cases.some(c => line.includes(c));
+    }
 
-updateUI();
+    function triggerAi() {
+        if (isGameOver) return;
+        const delay = 600 + Math.random() * 800;
+        setTimeout(() => {
+            let best;
+            switch(level) {
+                case 'easy': best = getBestMoveHeuristic(0.7, true); break;
+                case 'medium': best = getBestMoveHeuristic(1.1, false); break;
+                case 'hard': best = getMinimaxMove(1); break;
+                case 'impossible': best = getMinimaxMove(2); break;
+            }
+            if (best && best.x !== -1) placeStone(best.x, best.y);
+        }, delay);
+    }
+
+    function handleInput(e) {
+        if(isGameOver || (mode==="ai" && turn!==playerColor)) return;
+        const rect = c.getBoundingClientRect();
+        const cX = e.touches ? e.touches[0].clientX : e.clientX;
+        const cY = e.touches ? e.touches[0].clientY : e.clientY;
+        const scale = 600 / rect.width;
+        const x = Math.round(((cX - rect.left) * scale) / cell) - 1;
+        const y = Math.round(((cY - rect.top) * scale) / cell) - 1;
+        
+        if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) {
+            const forbidden = checkForbidden(x, y, turn);
+            if(forbidden) {
+                updateStatus(`⚠️ ${forbidden}입니다!`, true);
+                return;
+            }
+            placeStone(x,y);
+        }
+    }
+
+    c.addEventListener('mousedown', handleInput);
+    c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, {passive: false});
+
+    function placeStone(x,y){
+        board[y][x]=turn; lastMove={x,y}; moveHistory.push({x,y,p:turn}); draw();
+        if(checkWin(x,y,turn)){ endGame(turn); return; }
+        if (moveHistory.length === SIZE * SIZE) {
+            isGameOver = true; clearInterval(timerInterval); endReason="무승부";
+            document.getElementById("finishResultText").innerText = "무승부";
+            document.getElementById("finishConfirmModal").style.display = "flex";
+            return;
+        }
+        turn=3-turn; startTurn(); 
+    }
+
+    function checkWin(x,y,t){
+        const ds=[[1,0],[0,1],[1,1],[1,-1]];
+        for(let [dx,dy] of ds){
+            let count=1;
+            for(let i=1;i<5;i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
+            for(let i=1;i<5;i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+            if(t === 1 && count === 5) return true;
+            if(t === 2 && count >= 5) return true;
+        }
+        return false;
+    }
+
+    function endGame(w){ 
+        isGameOver=true; if(timerInterval) clearInterval(timerInterval); endReason="정상종료";
+        saveHistory(w, "정상종료");
+        const isImp = (level === 'impossible' && mode === 'ai');
+        document.getElementById("finishResultText").innerText=(w===1?'흑':'백')+" 승리!"; 
+        document.getElementById("finishConfirmModal").style.display="flex"; 
+        document.getElementById("recordBtn").style.background = isImp ? "var(--impossible)" : "var(--primary)";
+        if(w===playerColor || mode!=='ai') confetti({particleCount:150, spread:70, origin:{y:0.6}, colors: isImp ? ['#8e44ad', '#ffffff'] : undefined}); 
+    }
+
+    function saveHistory(w, reason){
+        let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
+        h.unshift({ date:new Date().toLocaleString(), winner:w===1?'흑':'백', moves:moveHistory.length, data:[...moveHistory], isImp: (level==='impossible' && mode === 'ai'), reason: reason });
+        localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0,5)));
+    }
+
+    function showHistory(){
+        let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
+        let list=document.getElementById("historyList");
+        list.innerHTML=h.length?"":"<p style='color:#999;text-align:center;'>기록 없음</p>";
+        h.forEach((item, idx)=>{
+            if(!item || !item.winner || !item.date) return;
+            let d = item.date.includes(',') ? item.date.split(',')[1] : item.date;
+            let reasonTag = (item.reason && item.reason !== "정상종료") ? `<span style="color:var(--danger); font-size:10px; margin-left:4px;">(${item.reason})</span>` : "";
+            list.innerHTML+=`<div class="history-item" onclick="replay(${idx})"><div><strong style="color:${item.isImp?'var(--impossible)':'inherit'}">${item.winner} 승</strong>${reasonTag} (${item.moves}수)<br><small>${d}</small></div><button class="del-btn" onclick="deleteHistory(event, ${idx})">삭제</button></div>`;
+        });
+        document.getElementById("historyModal").style.display="flex";
+    }
+
+    function openDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display='flex'; }
+    function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display='none'; }
+    function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); showHistory(); }
+    function clearAllHistory(){ localStorage.removeItem("omok_final_history"); closeDeleteConfirm(); showHistory(); }
+
+    function viewFinalRecord(){
+        document.getElementById("finishConfirmModal").style.display="none";
+        document.getElementById("undoBtn").style.display="none";
+        document.getElementById("giveUpBtn").style.display="none";
+        document.getElementById("mainGoBtn").style.display="block";
+        let statusText = "복기 중: " + moveHistory.length + "수";
+        if(endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
+        updateStatus(statusText); draw();
+    }
+
+    function replay(idx){
+        let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
+        let g = h[idx]; if(!g) return;
+        board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
+        moveHistory = g.data; isGameOver = true; if(timerInterval) clearInterval(timerInterval);
+        endReason = g.reason || ""; 
+        moveHistory.forEach(m => board[m.y][m.x] = m.p);
+        document.getElementById("historyModal").style.display = "none";
+        document.getElementById("startModal").style.display = "none";
+        viewFinalRecord();
+    }
+
+    function updateTimerUI(){
+        const isImp = (level === 'impossible' && mode === 'ai');
+        for(let i=0;i<2;i++){
+            const tEl = document.getElementById(`timer${i+1}`);
+            const isCurrent = (turn === i+1);
+            if(isCurrent) {
+                if(isImp) {
+                    tEl.innerText = `00:${String(Math.max(0, currentLimit)).padStart(2,'0')}`;
+                    tEl.classList.add("imp-border");
+                    if(currentLimit <= 5) tEl.classList.add("warning"); else tEl.classList.remove("warning");
+                } else { tEl.innerText = `∞`; tEl.classList.remove("warning", "imp-border"); }
+                tEl.classList.add("active");
+            } else { tEl.innerText = isImp ? `00:20` : `∞`; tEl.classList.remove("active", "imp-border", "warning"); }
+        }
+    }
+
+    function undo(){
+        if(moveHistory.length===0||isGameOver)return;
+        if(level === 'impossible' && mode === 'ai') return;
+        undoCount++;
+        let s=(mode==="ai")?2:1;
+        for(let i=0; i<s; i++){ let l=moveHistory.pop(); if(l)board[l.y][l.x]=0; }
+        lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;
+        if(mode!=="ai") turn=3-turn; 
+        draw(); startTurn(); 
+        updateStatus(`무르기 완료 (${undoCount}/3)`, true);
+    }
+
+    function getBestMoveHeuristic(dW, isRandom) {
+        let bX = -1, bY = -1, mS = -1;
+        for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
+            if (board[y][x] === 0) {
+                if (turn === 1 && checkForbidden(x, y, 1)) continue;
+                let s = getPoint(x, y, turn) + (getPoint(x, y, 3-turn) * dW);
+                if (isRandom) s *= (0.8 + Math.random() * 0.4);
+                if (s > mS) { mS = s; bX = x; bY = y; }
+            }
+        }
+        return {x: bX, y: bY};
+    }
+
+    function getMinimaxMove(depth) {
+        let bestScore = -Infinity; let move = {x: -1, y: -1};
+        let candidates = [];
+        for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
+            if(board[y][x] === 0) {
+                if (turn === 1 && checkForbidden(x, y, 1)) continue;
+                let s = getPoint(x, y, turn) + getPoint(x, y, 3-turn);
+                candidates.push({x, y, s});
+            }
+        }
+        candidates.sort((a,b) => b.s - a.s);
+        let searchRange = candidates.slice(0, 15); 
+        for (let m of searchRange) {
+            board[m.y][m.x] = turn;
+            let score = minimax(depth, -Infinity, Infinity, false);
+            board[m.y][m.x] = 0;
+            if (score > bestScore) { bestScore = score; move = m; }
+        }
+        return move;
+    }
+
+    function minimax(depth, alpha, beta, isMaximizing) {
+        if (depth === 0) return evaluate();
+        let candidates = [];
+        let currTurn = isMaximizing ? turn : 3 - turn;
+        for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
+            if(board[y][x] === 0) {
+                if (currTurn === 1 && checkForbidden(x, y, 1)) continue;
+                let s = getPoint(x, y, turn) + getPoint(x, y, 3-turn);
+                candidates.push({x, y, s});
+            }
+        }
+        candidates.sort((a,b) => b.s - a.s);
+        let searchRange = candidates.slice(0, 8);
+        if (isMaximizing) {
+            let maxEval = -Infinity;
+            for (let m of searchRange) {
+                board[m.y][m.x] = turn;
+                let eval = minimax(depth - 1, alpha, beta, false);
+                board[m.y][m.x] = 0;
+                maxEval = Math.max(maxEval, eval);
+                alpha = Math.max(alpha, eval);
+                if (beta <= alpha) break;
+            }
+            return maxEval;
+        } else {
+            let minEval = Infinity;
+            for (let m of searchRange) {
+                board[m.y][m.x] = 3 - turn;
+                let eval = minimax(depth - 1, alpha, beta, true);
+                board[m.y][m.x] = 0;
+                minEval = Math.min(minEval, eval);
+                beta = Math.min(beta, eval);
+                if (beta <= alpha) break;
+            }
+            return minEval;
+        }
+    }
+
+    function evaluate() {
+        let myScore = 0, opponentScore = 0;
+        for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
+            if(board[y][x] === turn) myScore += getPoint(x, y, turn);
+            else if(board[y][x] === 3-turn) opponentScore += getPoint(x, y, 3-turn);
+        }
+        return myScore - (opponentScore * 1.5);
+    }
+
+    function getPoint(x, y, t) {
+        let total = 0; const ds = [[1, 0], [0, 1], [1, 1], [1, -1]];
+        for (let [dx, dy] of ds) {
+            let c = 1, b = 0;
+            for (let i = 1; i < 5; i++) {
+                let nx = x + dx * i, ny = y + dy * i;
+                if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+            }
+            for (let i = 1; i < 5; i++) {
+                let nx = x - dx * i, ny = y - dy * i;
+                if (nx >= 0 && nx < SIZE && ny >= 0 && ny < SIZE) { if (board[ny][nx] === t) c++; else if (board[ny][nx] === 0) break; else { b++; break; } } else { b++; break; }
+            }
+            if (c >= 5) total += 100000;
+            else if (c === 4 && b === 0) total += 10000;
+            else if (c === 4 && b === 1) total += 2000;
+            else if (c === 3 && b === 0) total += 3000;
+            else if (c === 3 && b === 1) total += 500;
+        }
+        return total;
+    }
+
+    updateUI();
 </script>
 </body>
 </html>
