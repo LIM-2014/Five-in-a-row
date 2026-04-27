@@ -12,6 +12,14 @@
     <link rel="manifest" href="/manifest.json">
     <link rel="apple-touch-icon" href="/Favicon512.png">
     <meta name="theme-color" content="#000000">
+    <!-- download button -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('/sw.js')
+          .then(() => console.log("서비스 워커 등록 성공!"))
+          .catch((err) => console.log("등록 실패:", err));
+      }
+    </script>
     
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
