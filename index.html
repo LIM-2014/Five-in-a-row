@@ -2,7 +2,7 @@
 <html lang="ko">
 <head>
     <meta property="og:title" content="오목 마스터: 렌주룰">
-    <meta property="og:description" content="뛰어난 실력의 ai와 오목 한판 즐겨보세요!">
+    <meta property="og:description" content="뛰어난 실력의 AI와 오목 한판 즐겨보세요!">
     <meta property="og:image" content="https://raw.githubusercontent.com/LIM-2014/Five-in-a-row/refs/heads/main/snsPreviewImage.png">
     <meta property="og:url" content="https://aiomok.kro.kr">
     <link rel="icon" type="image/png" href="Favicon96.png">
@@ -27,7 +27,7 @@
             border-radius: 50px;
             box-shadow: 0 4px 12px rgba(0,0,0,0.3);
             z-index: 9999;
-            display: none; /* 초기값 hidden */
+            display: none;
             align-items: center;
             gap: 15px;
             font-size: 14px;
@@ -128,6 +128,8 @@
         .option-group { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
         .option-group .btn { padding: 10px 2px; font-size: 11px; margin: 0; flex: 1; min-width: 60px; }
 
+        .setting-label { font-size: 13px; color: #666; margin-bottom: 8px; text-align: left; font-weight: bold; }
+
         #aiOptions { transition: 0.3s; }
         #aiOptions.disabled { opacity: 0.3; pointer-events: none; user-select: none; }
 
@@ -172,6 +174,7 @@
         .control-panel { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
 
         #mainGoBtn { display: none; background: var(--dark); color: white; }
+        #confirmPlaceBtn { display: none; background: var(--primary); color: white; flex: 1.5; }
     </style>
 </head>
 <body>
@@ -201,6 +204,15 @@
                 <button class="btn" id="impBtn" onclick="level='impossible'; updateUI();">불가능</button>
             </div>
         </div>
+        
+        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+            <div class="setting-label">착수 방식</div>
+            <div class="option-group">
+                <button class="btn" id="directModeBtn" onclick="setPlaceMode('direct')">즉시 착수</button>
+                <button class="btn" id="confirmModeBtn" onclick="setPlaceMode('confirm')">확인 후 착수</button>
+            </div>
+        </div>
+
         <button class="btn sub" onclick="showHistory()">기보 관리 (최대 5개)</button>
         <button id="startBtn" class="btn active" style="background:var(--dark); margin-top:15px;" onclick="startGame()">게임 시작</button>
     </div>
@@ -256,6 +268,7 @@
     <canvas id="c" width="600" height="600"></canvas>
     <div class="control-panel">
         <button id="undoBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askUndo()">무르기</button>
+        <button id="confirmPlaceBtn" class="btn" onclick="finalConfirmPlace()">착수하기</button>
         <button id="mainGoBtn" class="btn" style="flex:1;" onclick="location.reload()">메인화면</button>
         <button id="giveUpBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askGiveUp()">기권</button>
     </div>
@@ -268,7 +281,16 @@
     let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
     let currentLimit=20, timerInterval, moveHistory=[], undoCount=0, endReason="";
     let statusTimeout = null;
+    let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct"; // direct | confirm
+    let tempMove = null;
     const SIZE=15, c=document.getElementById("c"), ctx=c.getContext("2d"), cell = 600 / 16;
+
+    function setPlaceMode(m) {
+        placeMode = m;
+        localStorage.setItem("omok_settings_placeMode", m);
+        document.getElementById("directModeBtn").classList.toggle("active", m === 'direct');
+        document.getElementById("confirmModeBtn").classList.toggle("active", m === 'confirm');
+    }
 
     function updateUI() {
         const isImp = (level === 'impossible' && mode === 'ai');
@@ -288,13 +310,15 @@
             el.classList.toggle("active", level===l);
             if(l==='impossible') el.classList.toggle("imp-active", level==='impossible' && mode==='ai');
         });
+        setPlaceMode(placeMode);
     }
 
     function startGame() {
         board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-        moveHistory=[]; isGameOver=false; turn=1; endReason=""; undoCount=0;
+        moveHistory=[]; isGameOver=false; turn=1; endReason=""; undoCount=0; tempMove = null;
         document.getElementById("startModal").style.display="none";
         document.getElementById("mainGoBtn").style.display="none";
+        document.getElementById("confirmPlaceBtn").style.display="none";
         const isImp = (level === 'impossible' && mode === 'ai');
         const ub = document.getElementById("undoBtn");
         ub.style.display="block";
@@ -391,6 +415,17 @@
         }
         [4, 8, 12].forEach(y => [4, 8, 12].forEach(x => { ctx.beginPath(); ctx.arc(x*cell, y*cell, 4, 0, Math.PI*2); ctx.fillStyle="#4a3419"; ctx.fill(); }));
         for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++) if(board[y][x]) drawStone(x,y,board[y][x]);
+        
+        // 가이드 돌 (확인 후 착수 모드)
+        if (placeMode === "confirm" && tempMove && !isGameOver) {
+            ctx.save();
+            ctx.globalAlpha = 0.5;
+            drawStone(tempMove.x, tempMove.y, turn);
+            ctx.restore();
+            ctx.strokeStyle = "#ff4d4d"; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc((tempMove.x+1)*cell, (tempMove.y+1)*cell, cell*0.45, 0, Math.PI*2); ctx.stroke();
+        }
+
         if(isGameOver) {
             moveHistory.forEach((m,i)=>{
                 ctx.font="bold 14px Arial"; ctx.textAlign="center"; ctx.textBaseline="middle";
@@ -514,10 +549,25 @@
         const y = Math.round(((cY - rect.top) * scale) / cell) - 1;
         
         if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) {
-            const forbidden = checkRenjuForbidden(x, y, turn);
-            if(forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
-            placeStone(x,y);
+            if (placeMode === "direct") {
+                const forbidden = checkRenjuForbidden(x, y, turn);
+                if(forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
+                placeStone(x,y);
+            } else {
+                tempMove = {x, y};
+                document.getElementById("confirmPlaceBtn").style.display = "block";
+                draw();
+            }
         }
+    }
+
+    function finalConfirmPlace() {
+        if (!tempMove || isGameOver) return;
+        const forbidden = checkRenjuForbidden(tempMove.x, tempMove.y, turn);
+        if(forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
+        placeStone(tempMove.x, tempMove.y);
+        tempMove = null;
+        document.getElementById("confirmPlaceBtn").style.display = "none";
     }
 
     c.addEventListener('mousedown', handleInput);
@@ -574,6 +624,7 @@
         document.getElementById("undoBtn").style.display="none";
         document.getElementById("giveUpBtn").style.display="none";
         document.getElementById("mainGoBtn").style.display="block";
+        document.getElementById("confirmPlaceBtn").style.display="none";
         let statusText = "복기 중: " + moveHistory.length + "수";
         if(endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
         updateStatus(statusText); draw();
@@ -614,6 +665,7 @@
         let s=(mode==="ai")?2:1;
         for(let i=0; i<s; i++){ let l=moveHistory.pop(); if(l)board[l.y][l.x]=0; }
         lastMove=moveHistory.length>0?moveHistory[moveHistory.length-1]:null;
+        tempMove = null; document.getElementById("confirmPlaceBtn").style.display = "none";
         if(mode!=="ai") turn=3-turn; 
         draw(); startTurn(); 
         updateStatus(`무르기 완료 (${undoCount}/3)`, true);
