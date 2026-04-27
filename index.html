@@ -1,16 +1,13 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <!-- sns preview image -->
     <meta property="og:title" content="오목 마스터: 렌주룰">
     <meta property="og:description" content="뛰어난 실력의 ai와 오목 한판 즐겨보세요!">
     <meta property="og:image" content="https://raw.githubusercontent.com/LIM-2014/Five-in-a-row/refs/heads/main/snsPreviewImage.png">
     <meta property="og:url" content="https://aiomok.kro.kr">
-    <!-- Favico -->
-    <link rel="icon" type="images/png" href="/Favicon96.png">
-    <!-- connect with app -->
-    <link rel="manifest" href="/manifest.json">
-    <link rel="apple-touch-icon" href="/Favicon512.png">
+    <link rel="icon" type="image/png" href="Favicon96.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="Favicon512.png">
     <meta name="theme-color" content="#000000">
     
     <meta charset="UTF-8">
@@ -19,41 +16,41 @@
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
         /* download button */
-            #install-banner {
-              position: fixed;
-              bottom: 20px;
-              left: 50%;
-              transform: translateX(-50%);
-              background: #333;
-              color: white;
-              padding: 12px 20px;
-              border-radius: 50px;
-              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
-              z-index: 9999;
-              display: flex;
-              align-items: center;
-              gap: 15px;
-              font-size: 14px;
-              white-space: nowrap;
-            }
+        #install-banner {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #333;
+            color: white;
+            padding: 12px 20px;
+            border-radius: 50px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+            z-index: 9999;
+            display: none; /* 초기값 hidden */
+            align-items: center;
+            gap: 15px;
+            font-size: 14px;
+            white-space: nowrap;
+        }
         
         #install-btn {
-              background: #4CAF50;
-              border: none;
-              color: white;
-              padding: 6px 15px;
-              border-radius: 20px;
-              cursor: pointer;
-              font-weight: bold;
-            }
+            background: #4CAF50;
+            border: none;
+            color: white;
+            padding: 6px 15px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-weight: bold;
+        }
         
         #close-btn {
-              background: none;
-              border: none;
-              color: #bbb;
-              cursor: pointer;
-              font-size: 16px;
-            }
+            background: none;
+            border: none;
+            color: #bbb;
+            cursor: pointer;
+            font-size: 16px;
+        }
         
         :root {
             --bg: #e9d6a7;
@@ -65,29 +62,27 @@
 
         * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
-        /* 기존 body 수정 */
         body {
             margin: 0; 
             background: var(--bg); 
             font-family: 'Pretendard', -apple-system, sans-serif;
             display: flex; 
-            flex-direction: column; /* 세로 방향 정렬 */
+            flex-direction: column;
             align-items: center; 
-            justify-content: center; /* 중앙 정렬 */
-            min-height: 100dvh; /* height 대신 min-height 사용 */
+            justify-content: center;
+            min-height: 100dvh;
             overflow: hidden; 
             touch-action: none;
         }
 
-        /* 푸터 디자인 추가 */
         footer {
             position: fixed;
             bottom: 0;
             width: 100%;
             padding: 15px 0;
-            background: rgba(0, 0, 0, 0.05); /* 은은한 배경 */
-            backdrop-filter: blur(5px); /* 배경 흐림 효과 */
-            color: #6a5a40; /* 보드 색상과 어울리는 톤 */
+            background: rgba(0, 0, 0, 0.05);
+            backdrop-filter: blur(5px);
+            color: #6a5a40;
             font-size: 12px;
             text-align: center;
             border-top: 1px solid rgba(0, 0, 0, 0.05);
@@ -100,13 +95,9 @@
             font-weight: bold;
         }
         
-        footer a:hover {
-            text-decoration: underline;
-        }
-        
-        /* 모바일 대응: 푸터와 보드가 겹치지 않게 래퍼 여백 조정 */
         .wrapper {
-            padding-bottom: 60px; 
+            position: relative; display: flex; flex-direction: column; align-items: center;
+            width: 100%; max-width: 600px; padding: 10px; padding-bottom: 60px; 
         }
 
         #startModal, #historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal {
@@ -139,11 +130,6 @@
 
         #aiOptions { transition: 0.3s; }
         #aiOptions.disabled { opacity: 0.3; pointer-events: none; user-select: none; }
-
-        .wrapper {
-            position: relative; display: flex; flex-direction: column; align-items: center;
-            width: 100%; max-width: 600px; padding: 10px;
-        }
 
         canvas {
             background: linear-gradient(135deg,#d8a45d,#c8924a); border: 4px solid #4a3419;
@@ -189,6 +175,12 @@
     </style>
 </head>
 <body>
+
+<div id="install-banner">
+    <span>앱으로 더 편하게 오목을 즐기세요!</span>
+    <button onclick="installApp()" id="install-btn">설치하기</button>
+    <button onclick="closeBanner()" id="close-btn">✕</button>
+</div>
 
 <div id="startModal">
     <div class="box">
@@ -269,10 +261,10 @@
     </div>
 </div>
 
-    <footer>Developed by <a href="https://github.com/LIM-2014">Lim-2014</a> | Copyright 2026. 임준서 All rights reserved | <a href="https://github.com/LIM-2014/Five-in-a-row">Repository</a></footer>
-    
+<footer>Developed by <a href="https://github.com/LIM-2014">Lim-2014</a> | Copyright 2026. 임준서 All rights reserved | <a href="https://github.com/LIM-2014/Five-in-a-row">Repository</a></footer>
+
 <script>
-    // 기본 설정을 'easy'로 변경
+    // --- 게임 엔진 로직 ---
     let mode="ai", level="easy", board=[], turn=1, isGameOver=false, lastMove=null, playerColor=1;
     let currentLimit=20, timerInterval, moveHistory=[], undoCount=0, endReason="";
     let statusTimeout = null;
@@ -286,7 +278,6 @@
         if(mode === 'friend') aiOpts.classList.add("disabled");
         else aiOpts.classList.remove("disabled");
         
-        // 버튼 색상 업데이트
         document.getElementById("startBtn").style.background = isImp ? "var(--impossible)" : "var(--dark)";
         document.getElementById("colorBlack").classList.toggle("active", playerColor===1);
         document.getElementById("colorWhite").classList.toggle("active", playerColor===2);
@@ -322,9 +313,7 @@
 
         if (msg) {
             s.innerText = msg;
-            if (isPriority) {
-                statusTimeout = setTimeout(() => updateStatus(), 3000);
-            }
+            if (isPriority) { statusTimeout = setTimeout(() => updateStatus(), 3000); }
             return;
         }
 
@@ -332,7 +321,6 @@
             s.innerText = "AI 생각 중..."; s.classList.add("thinking");
             if (isImp) s.classList.add("imp-text");
         } else {
-            // "금수 주의" 삭제 적용
             s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
         }
     }
@@ -341,19 +329,13 @@
         const oldBtn = document.getElementById("confirmActionBtn");
         const newBtn = oldBtn.cloneNode(true);
         oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-        newBtn.onclick = () => {
-            callback();
-            closeActionConfirm();
-        };
+        newBtn.onclick = () => { callback(); closeActionConfirm(); };
     }
 
     function askUndo() {
         if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
         if (moveHistory.length === 0) return;
-        if (undoCount >= 3) {
-            updateStatus("⚠️ 무르기 제한 초과 (3/3)", true);
-            return;
-        }
+        if (undoCount >= 3) { updateStatus("⚠️ 무르기 제한 초과 (3/3)", true); return; }
         document.getElementById("actionTitle").innerText = "무르기 확인";
         document.getElementById("actionDesc").innerText = `무르기를 사용하시겠습니까?\n(현재 ${undoCount}/3회 사용됨)`;
         setupConfirmBtn(undo);
@@ -428,6 +410,7 @@
         ctx.beginPath(); ctx.arc(px,py,cell*0.43,0,Math.PI*2); ctx.fillStyle=grad; ctx.fill();
     }
 
+    // --- 렌주룰 및 AI 로직 ---
     function checkRenjuForbidden(x, y, t) {
         if (t !== 1) return false;
         if (checkWinStrict(x, y, 1)) return false;
@@ -504,16 +487,10 @@
 
     function triggerAi() {
         if (isGameOver) return;
-
-        // 확률 분포 지연 로직 (1500ms 최빈값)
         const min = 500, max = 5000, modeVal = 1500;
-        let delay;
-        const u = Math.random();
-        if (u < (modeVal - min) / (max - min)) {
-            delay = min + Math.sqrt(u * (max - min) * (modeVal - min));
-        } else {
-            delay = max - Math.sqrt((1 - u) * (max - min) * (max - modeVal));
-        }
+        let delay; const u = Math.random();
+        if (u < (modeVal - min) / (max - min)) { delay = min + Math.sqrt(u * (max - min) * (modeVal - min)); }
+        else { delay = max - Math.sqrt((1 - u) * (max - min) * (max - modeVal)); }
 
         setTimeout(() => {
             let best;
@@ -538,10 +515,7 @@
         
         if(x>=0 && x<SIZE && y>=0 && y<SIZE && board[y][x]===0) {
             const forbidden = checkRenjuForbidden(x, y, turn);
-            if(forbidden) {
-                updateStatus(`⚠️ ${forbidden} (흑 금수)`, true);
-                return;
-            }
+            if(forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
             placeStone(x,y);
         }
     }
@@ -645,6 +619,7 @@
         updateStatus(`무르기 완료 (${undoCount}/3)`, true);
     }
 
+    // --- AI 핵심 알고리즘 ---
     function getBestMoveHeuristic(dW, isRandom) {
         let bX = -1, bY = -1, mS = -1;
         for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
@@ -659,38 +634,26 @@
     }
 
     function getMinimaxMove(depth) {
-        let bestScore = -Infinity;
-        let move = {x: -1, y: -1};
-        let candidates = [];
-        
-        let winMove = findImmediateWin(turn);
-        if(winMove) return winMove;
-
-        let threatMove = findImmediateWin(3-turn);
-        if(threatMove) return threatMove;
+        let bestScore = -Infinity; let move = {x: -1, y: -1}; let candidates = [];
+        let winMove = findImmediateWin(turn); if(winMove) return winMove;
+        let threatMove = findImmediateWin(3-turn); if(threatMove) return threatMove;
 
         for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
             if(board[y][x] === 0) {
                 if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
-                
                 let hasNeighbor = false;
                 for(let dy=-2; dy<=2; dy++) {
-                    for(let dx=-2; dx<=2; dx++) {
-                        if(board[y+dy]?.[x+dx]) { hasNeighbor = true; break; }
-                    }
+                    for(let dx=-2; dx<=2; dx++) { if(board[y+dy]?.[x+dx]) { hasNeighbor = true; break; } }
                     if(hasNeighbor) break;
                 }
                 let centerBonus = (7-Math.abs(7-x) + 7-Math.abs(7-y)) * 10;
                 if (!hasNeighbor && moveHistory.length > 0) continue;
-                
                 let s = getPointBetter(x, y, turn) * 1.5 + getPointBetter(x, y, 3-turn) + centerBonus;
                 candidates.push({x, y, s});
             }
         }
-        
         candidates.sort((a,b) => b.s - a.s);
         let searchRange = candidates.slice(0, 15);
-        
         for (let m of searchRange) {
             board[m.y][m.x] = turn;
             let score = minimax(depth - 1, -Infinity, Infinity, false);
@@ -714,12 +677,10 @@
         if (depth === 0) return evaluateBetter();
         let currTurn = isMax ? turn : 3 - turn;
         let candidates = [];
-        
         for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
             if(board[y][x] === 0) {
                 if (currTurn === 1 && checkRenjuForbidden(x, y, 1)) continue;
-                let s = getPointBetter(x, y, currTurn);
-                candidates.push({x, y, s});
+                candidates.push({x, y, s: getPointBetter(x, y, currTurn)});
             }
         }
         candidates.sort((a,b) => b.s - a.s);
@@ -731,9 +692,7 @@
                 board[m.y][m.x] = turn;
                 if (checkWinStrict(m.x, m.y, turn)) { board[m.y][m.x]=0; return 2000000 + depth; }
                 let ev = minimax(depth-1, alpha, beta, false);
-                board[m.y][m.x] = 0;
-                maxE = Math.max(maxE, ev);
-                alpha = Math.max(alpha, ev);
+                board[m.y][m.x] = 0; maxE = Math.max(maxE, ev); alpha = Math.max(alpha, ev);
                 if (beta <= alpha) break;
             }
             return maxE;
@@ -743,9 +702,7 @@
                 board[m.y][m.x] = 3 - turn;
                 if (checkWinStrict(m.x, m.y, 3-turn)) { board[m.y][m.x]=0; return -2000000 - depth; }
                 let ev = minimax(depth-1, alpha, beta, true);
-                board[m.y][m.x] = 0;
-                minE = Math.min(minE, ev);
-                beta = Math.min(beta, ev);
+                board[m.y][m.x] = 0; minE = Math.min(minE, ev); beta = Math.min(beta, ev);
                 if (beta <= alpha) break;
             }
             return minE;
@@ -781,78 +738,53 @@
                     else break;
                 } else break;
             }
-            
             if (count >= 5) total += 1000000;
-            else if (count === 4) {
-                if(openEnds === 2) total += 200000;
-                else if(openEnds === 1) total += 50000;
-            }
-            else if (count === 3) {
-                if(openEnds === 2) total += 10000;
-                else if(openEnds === 1) total += 1000;
-            }
-            else if (count === 2) {
-                if(openEnds === 2) total += 500;
-            }
+            else if (count === 4) { total += (openEnds === 2) ? 200000 : (openEnds === 1 ? 50000 : 0); }
+            else if (count === 3) { total += (openEnds === 2) ? 10000 : (openEnds === 1 ? 1000 : 0); }
+            else if (count === 2) { total += (openEnds === 2) ? 500 : 0; }
         }
         return total;
     }
 
-    updateUI();
-
-    // download button
+    // --- PWA 설치 및 서비스 워커 로직 ---
     let deferredPrompt;
-const installBanner = document.getElementById('install-banner');
 
-// 1. 브라우저가 설치 가능함을 감지했을 때
-window.addEventListener('beforeinstallprompt', (e) => {
-  e.preventDefault(); // 기본 팝업 방지
-  deferredPrompt = e; // 이벤트 저장
-  
-  // 이미 설치된 상태가 아니라면 배너 보이기
-  if (!window.matchMedia('(display-mode: standalone)').matches) {
-    installBanner.style.display = 'flex';
-  }
-});
+    window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        deferredPrompt = e;
+        const banner = document.getElementById('install-banner');
+        if (banner && !window.matchMedia('(display-mode: standalone)').matches) {
+            banner.style.display = 'flex';
+        }
+    });
 
-// 2. 설치 함수
-function installApp() {
-  if (!deferredPrompt) return;
-  
-  deferredPrompt.prompt(); // 설치 창 띄우기
-  
-  deferredPrompt.userChoice.then((choiceResult) => {
-    if (choiceResult.outcome === 'accepted') {
-      console.log('사용자가 설치를 완료했습니다.');
-      installBanner.style.display = 'none'; // 설치 승인 시 배너 숨김
+    function installApp() {
+        if (!deferredPrompt) return;
+        deferredPrompt.prompt();
+        deferredPrompt.userChoice.then((choiceResult) => {
+            if (choiceResult.outcome === 'accepted') {
+                document.getElementById('install-banner').style.display = 'none';
+            }
+            deferredPrompt = null;
+        });
     }
-    deferredPrompt = null;
-  });
-}
 
-// 3. 설치 완료 이벤트 발생 시 배너 숨기기 (확실하게)
-window.addEventListener('appinstalled', () => {
-  installBanner.style.display = 'none';
-  deferredPrompt = null;
-  console.log('PWA 설치 완료');
-});
+    window.addEventListener('appinstalled', () => {
+        document.getElementById('install-banner').style.display = 'none';
+        deferredPrompt = null;
+    });
 
-// 4. 그냥 닫기 버튼 눌렀을 때
-function closeBanner() {
-  installBanner.style.display = 'none';
-}
+    function closeBanner() {
+        document.getElementById('install-banner').style.display = 'none';
+    }
 
-// download button
-if ('serviceWorker' in navigator) {
-     navigator.serviceWorker.register('sw.js')
-    .then(() => console.log("서비스 워커 등록 성공!"))
-    .catch((err) => console.log("등록 실패:", err));
-  }
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js')
+            .then(() => console.log("서비스 워커 등록 성공!"))
+            .catch((err) => console.log("등록 실패:", err));
+    }
+
+    updateUI();
 </script>
-    <div id="install-banner" style="display: none;">
-      <span>앱으로 더 편하게 오목을 즐기세요!</span>
-      <button onclick="installApp()" id="install-btn">설치하기</button>
-      <button onclick="closeBanner()" id="close-btn">✕</button>
-    </div>
 </body>
 </html>
