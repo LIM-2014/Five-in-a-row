@@ -18,6 +18,43 @@
     <title>오목 마스터: 렌주룰</title>
     <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
     <style>
+        /* download button */
+            #install-banner {
+              position: fixed;
+              bottom: 20px;
+              left: 50%;
+              transform: translateX(-50%);
+              background: #333;
+              color: white;
+              padding: 12px 20px;
+              border-radius: 50px;
+              box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+              z-index: 9999;
+              display: flex;
+              align-items: center;
+              gap: 15px;
+              font-size: 14px;
+              white-space: nowrap;
+            }
+        
+        #install-btn {
+              background: #4CAF50;
+              border: none;
+              color: white;
+              padding: 6px 15px;
+              border-radius: 20px;
+              cursor: pointer;
+              font-weight: bold;
+            }
+        
+        #close-btn {
+              background: none;
+              border: none;
+              color: #bbb;
+              cursor: pointer;
+              font-size: 16px;
+            }
+        
         :root {
             --bg: #e9d6a7;
             --primary: #2f6fed;
@@ -762,6 +799,53 @@
     }
 
     updateUI();
+
+    // download button
+    let deferredPrompt;
+const installBanner = document.getElementById('install-banner');
+
+// 1. 브라우저가 설치 가능함을 감지했을 때
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault(); // 기본 팝업 방지
+  deferredPrompt = e; // 이벤트 저장
+  
+  // 이미 설치된 상태가 아니라면 배너 보이기
+  if (!window.matchMedia('(display-mode: standalone)').matches) {
+    installBanner.style.display = 'flex';
+  }
+});
+
+// 2. 설치 함수
+function installApp() {
+  if (!deferredPrompt) return;
+  
+  deferredPrompt.prompt(); // 설치 창 띄우기
+  
+  deferredPrompt.userChoice.then((choiceResult) => {
+    if (choiceResult.outcome === 'accepted') {
+      console.log('사용자가 설치를 완료했습니다.');
+      installBanner.style.display = 'none'; // 설치 승인 시 배너 숨김
+    }
+    deferredPrompt = null;
+  });
+}
+
+// 3. 설치 완료 이벤트 발생 시 배너 숨기기 (확실하게)
+window.addEventListener('appinstalled', () => {
+  installBanner.style.display = 'none';
+  deferredPrompt = null;
+  console.log('PWA 설치 완료');
+});
+
+// 4. 그냥 닫기 버튼 눌렀을 때
+function closeBanner() {
+  installBanner.style.display = 'none';
+}
 </script>
+    <div id="install-banner" style="display: none;">
+      <span>앱으로 더 편하게 오목을 즐기세요!</span>
+      <button onclick="installApp()" id="install-btn">설치하기</button>
+      <button onclick="closeBanner()" id="close-btn">✕</button>
+    </div>
 </body>
 </html>
