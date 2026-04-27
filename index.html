@@ -2,355 +2,254 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"/>
     <title>오목 마스터: 렌주룰</title>
-    
-    <meta property="og:title" content="오목 마스터: 렌주룰">
-    <meta property="og:description" content="인공지능과 즐기는 정통 렌주룰 오목">
-    <link rel="manifest" href="manifest.json">
-    <link rel="apple-touch-icon" href="Favicon512.png">
-    <meta name="theme-color" content="#e9d6a7">
-
-    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
-
     <style>
         :root {
             --bg: #e9d6a7;
             --primary: #2f6fed;
             --dark: #333;
-            --danger: #e74c3c;
             --impossible: #8e44ad;
         }
-
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
 
         body {
             margin: 0; background: var(--bg);
             font-family: 'Pretendard', sans-serif;
-            display: flex; flex-direction: column; align-items: center; justify-content: center;
-            min-height: 100dvh; overflow: hidden; touch-action: none;
+            display: flex; flex-direction: column; align-items: center;
+            justify-content: center; min-height: 100dvh; touch-action: none;
         }
 
-        /* --- 레이아웃 --- */
-        .wrapper {
-            position: relative; display: flex; flex-direction: column;
-            align-items: center; width: 100%; max-width: 600px;
-            padding: 10px; padding-bottom: 60px;
-        }
+        .wrapper { position: relative; width: 100%; max-width: 600px; padding: 15px; }
 
         canvas {
-            background: linear-gradient(135deg,#d8a45d,#c8924a);
-            border: 4px solid #4a3419; border-radius: 12px;
-            width: 100%; aspect-ratio: 1/1; box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-
-        /* --- 안내 배너 --- */
-        #install-banner {
-            position: fixed; bottom: 85px; left: 50%; transform: translateX(-50%);
-            background: rgba(30, 30, 30, 0.96); backdrop-filter: blur(8px);
-            color: white; padding: 14px 20px; border-radius: 16px;
-            display: none; align-items: center; gap: 12px; z-index: 10001;
-            width: 90%; max-width: 400px; box-shadow: 0 8px 25px rgba(0,0,0,0.4);
-        }
-
-        #install-btn {
-            background: var(--primary); border: none; color: white;
-            padding: 8px 16px; border-radius: 8px; font-weight: bold; cursor: pointer;
-        }
-
-        /* --- 모달 및 버튼 --- */
-        .modal {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.7);
-            display: flex; align-items: center; justify-content: center; z-index: 10000;
+            background: #d8a45d; border: 4px solid #4a3419;
+            border-radius: 12px; width: 100%; height: auto; aspect-ratio: 1/1;
         }
 
         .box {
-            background: #fff; width: 90%; max-width: 340px;
-            padding: 25px; border-radius: 24px; text-align: center;
+            background: #fff; padding: 25px; border-radius: 20px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3); text-align: center;
         }
 
         .btn {
-            width: 100%; padding: 14px; margin: 5px 0; border-radius: 12px;
-            border: none; background: #f0f0f0; font-weight: 700; cursor: pointer; transition: 0.2s;
+            width: 100%; padding: 12px; margin: 5px 0; border-radius: 10px;
+            border: none; cursor: pointer; font-weight: bold; transition: 0.2s;
         }
 
         .btn.active { background: var(--primary); color: #fff; }
-        .btn.active.imp-active { background: var(--impossible) !important; }
 
-        .option-group { display: flex; gap: 5px; margin-bottom: 10px; }
-        .option-group .btn { flex: 1; padding: 10px; font-size: 13px; }
-
-        .info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; }
-        .timer-box {
-            background: #000; color: #fff; padding: 8px 12px;
-            border-radius: 10px; font-family: monospace; min-width: 70px; text-align: center;
+        #startModal {
+            position: fixed; inset: 0; display: flex; align-items: center;
+            justify-content: center; background: rgba(0,0,0,0.7); z-index: 1000;
         }
 
         .status {
-            flex: 1; background: var(--dark); color: #fff;
-            padding: 10px; border-radius: 20px; font-size: 13px; font-weight: bold; text-align: center;
+            background: var(--dark); color: white; padding: 10px;
+            border-radius: 20px; text-align: center; margin-bottom: 10px;
         }
-
-        footer { font-size: 11px; color: #6a5a40; margin-top: 15px; }
     </style>
 </head>
 <body>
 
-<div id="install-banner">
-    <span id="banner-text" style="flex:1; font-size:13px;">앱으로 설치해서 즐겨보세요!</span>
-    <button id="install-btn">설치</button>
-    <button onclick="this.parentElement.style.display='none'" style="background:none; border:none; color:#888; font-size:20px;">✕</button>
-</div>
-
-<div id="startModal" class="modal">
+<div id="startModal">
     <div class="box">
-        <div style="font-size: 1.4rem; font-weight: 800; margin-bottom: 20px;">오목 마스터</div>
-        <div class="option-group">
-            <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
-            <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>
+        <h2>오목 마스터</h2>
+        <div style="display: flex; gap: 5px; margin-bottom: 10px;">
+            <button class="btn active" onclick="mode='ai'">AI 대전</button>
+            <button class="btn" onclick="mode='friend'">친구 대전</button>
         </div>
-        <div id="aiOptions">
-            <div class="option-group">
-                <button class="btn active" id="colorBlack" onclick="playerColor=1; updateUI();">흑 (선수)</button>
-                <button class="btn" id="colorWhite" onclick="playerColor=2; updateUI();">백 (후수)</button>
-            </div>
-            <div class="option-group">
-                <button class="btn active" id="easyBtn" onclick="level='easy'; updateUI();">초보</button>
-                <button class="btn" id="midBtn" onclick="level='medium'; updateUI();">중수</button>
-                <button class="btn" id="hardBtn" onclick="level='hard'; updateUI();">고수</button>
-                <button class="btn" id="impBtn" onclick="level='impossible'; updateUI();">불가능</button>
-            </div>
-        </div>
-        <button class="btn active" style="background:var(--dark); margin-top:10px;" onclick="startGame()">게임 시작</button>
-    </div>
-</div>
-
-<div id="finishConfirmModal" class="modal" style="display:none;">
-    <div class="box" style="max-width: 280px;">
-        <div id="finishResultText" style="font-weight: bold; font-size: 1.2rem; margin-bottom: 20px;"></div>
-        <button class="btn active" onclick="location.reload()">다시 하기</button>
+        <button class="btn active" style="background:#333;" onclick="startGame()">게임 시작</button>
     </div>
 </div>
 
 <div class="wrapper">
-    <div class="info-bar">
-        <div id="timer1" class="timer-box">∞</div>
-        <div id="status" class="status">준비 완료</div>
-        <div id="timer2" class="timer-box">∞</div>
-    </div>
+    <div id="status" class="status">대기 중</div>
     <canvas id="c" width="600" height="600"></canvas>
-    <div style="display:flex; gap:10px; width:100%; margin-top:15px;">
-        <button id="undoBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="undo()">무르기</button>
-        <button id="giveUpBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="location.reload()">기권</button>
-    </div>
-    <footer>© 2026 Omok Master</footer>
+    <button class="btn" style="margin-top:10px; background:#fff;" onclick="undo()">무르기</button>
 </div>
 
 <script>
-    /* --- 1. PWA & 환경 감지 --- */
-    const isKakao = /KAKAOTALK/i.test(navigator.userAgent);
-    const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
-    let deferredPrompt;
+    let mode = "ai", level = "hard", board = [], turn = 1, isGameOver = false, lastMove = null;
+    const SIZE = 15, c = document.getElementById("c"), ctx = c.getContext("2d"), cell = 600 / 16;
+    let moveHistory = [];
 
-    window.onload = () => {
-        const banner = document.getElementById('install-banner');
-        const txt = document.getElementById('banner-text');
-        const btn = document.getElementById('install-btn');
-
-        if (isKakao) {
-            txt.innerText = "카톡에선 설치가 안 됩니다. 외부 브라우저로 여세요!";
-            btn.onclick = () => alert("오른쪽 하단 [⋮] -> '다른 브라우저로 열기' 클릭!");
-            banner.style.display = 'flex';
-        } else if (isIOS && !window.navigator.standalone) {
-            txt.innerText = "홈 화면에 추가하여 앱처럼 즐기세요!";
-            btn.onclick = () => alert("공유 버튼(↑) 클릭 후 '홈 화면에 추가' 선택!");
-            banner.style.display = 'flex';
-        }
-    };
-
-    window.addEventListener('beforeinstallprompt', (e) => {
-        e.preventDefault(); deferredPrompt = e;
-        const banner = document.getElementById('install-banner');
-        const btn = document.getElementById('install-btn');
-        banner.style.display = 'flex';
-        btn.onclick = () => {
-            deferredPrompt.prompt();
-            deferredPrompt.userChoice.then(() => { banner.style.display = 'none'; });
-        };
-    });
-
-    /* --- 2. 게임 엔진 변수 --- */
-    let mode = 'ai', level = 'easy', playerColor = 1, turn = 1;
-    let board = [], moveHistory = [], isGameOver = false;
-    const SIZE = 15, c = document.getElementById('c'), ctx = c.getContext('2d'), cell = 600 / 16;
-
-    /* --- 3. 핵심 게임 로직 --- */
-    function startGame() {
-        board = Array.from({length: SIZE}, () => Array(SIZE).fill(0));
-        moveHistory = []; isGameOver = false; turn = 1;
-        document.getElementById('startModal').style.display = 'none';
-        draw();
-        if (mode === 'ai' && playerColor === 2) triggerAi();
+    function initBoard() {
+        board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
     }
 
-    function placeStone(x, y) {
-        if (board[y][x] !== 0 || isGameOver) return;
+    // --- 렌주룰 엔진 (보정된 핵심 로직) ---
+    function checkRenjuForbidden(x, y, t) {
+        if (t !== 1) return false; // 백은 금수 없음
+        if (checkWinStrict(x, y, 1)) return false; // 5목 완성은 금수보다 우선함
+
+        board[y][x] = 1; // 가상 착수
+        const ds = [[1, 0], [0, 1], [1, 1], [1, -1]];
         
-        // 렌주 금수 체크
-        if (turn === 1) {
-            const forbidden = checkRenjuForbidden(x, y, 1);
-            if (forbidden) { updateStatus(`⚠️ ${forbidden} (금수)`, true); return; }
-        }
+        let fourCount = 0, openThreeCount = 0;
 
-        board[y][x] = turn;
-        moveHistory.push({x, y, p: turn});
-        draw();
-
-        if (checkWinStrict(x, y, turn)) { endGame(turn); return; }
-        
-        turn = 3 - turn;
-        updateStatus(turn === 1 ? "흑의 차례" : "백의 차례");
-
-        if (mode === 'ai' && turn !== playerColor) triggerAi();
-    }
-
-    function checkWinStrict(x, y, t) {
-        const ds = [[1,0],[0,1],[1,1],[1,-1]];
         for (let [dx, dy] of ds) {
+            // 장륙 금수 체크
             let count = 1;
-            for (let i=1; i<6; i++) if (board[y+dy*i]?.[x+dx*i] === t) count++; else break;
-            for (let i=1; i<6; i++) if (board[y-dy*i]?.[x-dx*i] === t) count++; else break;
-            if (t === 1 && count === 5) return true; // 흑은 정확히 5개
-            if (t === 2 && count >= 5) return true;  // 백은 5개 이상 가능
+            for (let i = 1; i < 10; i++) if (board[y + dy * i]?.[x + dx * i] === 1) count++; else break;
+            for (let i = 1; i < 10; i++) if (board[y - dy * i]?.[x - dx * i] === 1) count++; else break;
+            if (count > 5) { board[y][x] = 0; return "장륙 금수"; }
+
+            // 44 및 33 카운트
+            if (isRealFour(x, y, dx, dy, 1)) fourCount++;
+            if (isRealOpenThree(x, y, dx, dy, 1)) openThreeCount++;
+        }
+        
+        board[y][x] = 0; // 원상 복구
+        if (fourCount >= 2) return "44 금수";
+        if (openThreeCount >= 2) return "33 금수";
+        return false;
+    }
+    // --- 렌주룰 세부 판정 로직 ---
+    function isRealFour(x, y, dx, dy, t) {
+        let count = 0;
+        for (let i = -4; i <= 4; i++) {
+            let nx = x + dx * i, ny = y + dy * i;
+            if (board[ny]?.[nx] === 0 || (nx === x && ny === y)) {
+                let temp = board[ny][nx]; board[ny][nx] = t;
+                if (checkWinStrict(nx, ny, t)) count++;
+                board[ny][nx] = temp;
+            }
+        }
+        return count > 0;
+    }
+
+    function isOpenFour(x, y, dx, dy, t) {
+        let count = 1, leftIdx = 0, rightIdx = 0;
+        for (let i = 1; i < 5; i++) if (board[y + dy * i]?.[x + dx * i] === t) count++; else { leftIdx = i; break; }
+        for (let i = 1; i < 5; i++) if (board[y - dy * i]?.[x - dx * i] === t) count++; else { rightIdx = i; break; }
+        
+        if (count === 4) {
+            let p1 = { x: x + dx * leftIdx, y: y + dy * leftIdx };
+            let p2 = { x: x - dx * rightIdx, y: y - dy * rightIdx };
+            let canLeft = (board[p1.y]?.[p1.x] === 0);
+            let canRight = (board[p2.y]?.[p2.x] === 0);
+
+            if (t === 1) { // 흑일 경우 금수 자리인지 추가 체크
+                if (canLeft && checkRenjuForbidden(p1.x, p1.y, 1)) canLeft = false;
+                if (canRight && checkRenjuForbidden(p2.x, p2.y, 1)) canRight = false;
+            }
+            return canLeft && canRight;
         }
         return false;
     }
 
-    /* --- 4. 렌주룰 금수 로직 --- */
-    function checkRenjuForbidden(x, y, t) {
-        // 장목(6목 이상) 체크
-        const ds = [[1,0],[0,1],[1,1],[1,-1]];
-        for (let [dx, dy] of ds) {
-            let count = 1;
-            for (let i=1; i<6; i++) if (board[y+dy*i]?.[x+dx*i] === t) count++; else break;
-            for (let i=1; i<6; i++) if (board[y-dy*i]?.[x-dx*i] === t) count++; else break;
-            if (count > 5) return "6목 금수";
+    function isRealOpenThree(x, y, dx, dy, t) {
+        let success = false;
+        for (let i = -4; i <= 4; i++) {
+            let nx = x + dx * i, ny = y + dy * i;
+            if (nx === x && ny === y || board[ny]?.[nx] !== 0) continue;
+            board[ny][nx] = t;
+            if (isOpenFour(nx, ny, dx, dy, t)) {
+                if (t !== 1 || !checkRenjuForbidden(nx, ny, 1)) success = true;
+            }
+            board[ny][nx] = 0;
+            if (success) break;
         }
-        // 33, 44 등 확장 로직은 생략 가능하나 필요시 여기에 추가
-        return null;
+        return success;
     }
 
-    /* --- 5. AI 알고리즘 --- */
+    function checkWinStrict(x, y, t) {
+        const ds = [[1,0],[0,1],[1,1],[1,-1]];
+        for(let [dx, dy] of ds) {
+            let count = 1;
+            for(let i=1; i<6; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
+            for(let i=1; i<6; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+            if (t === 1 && count === 5) return true; // 흑은 정확히 5목만 승리
+            if (t === 2 && count >= 5) return true;  // 백은 5목 이상(장륙 포함) 승리
+        }
+        return false;
+    }
+
+    // --- 게임 운영 및 AI 로직 ---
+    function draw() {
+        ctx.clearRect(0, 0, 600, 600);
+        ctx.strokeStyle = "#4a3419";
+        for (let i = 1; i <= SIZE; i++) {
+            ctx.beginPath(); ctx.moveTo(cell * i, cell); ctx.lineTo(cell * i, cell * SIZE); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(cell, cell * i); ctx.lineTo(cell * SIZE, cell * i); ctx.stroke();
+        }
+        for (let y = 0; y < SIZE; y++) {
+            for (let x = 0; x < SIZE; x++) {
+                if (board[y][x] > 0) {
+                    ctx.beginPath();
+                    ctx.arc(cell * (x + 1), cell * (y + 1), cell * 0.4, 0, Math.PI * 2);
+                    ctx.fillStyle = board[y][x] === 1 ? "#000" : "#fff";
+                    ctx.fill();
+                    if (lastMove && lastMove.x === x && lastMove.y === y) {
+                        ctx.strokeStyle = "red"; ctx.lineWidth = 2; ctx.stroke();
+                    }
+                }
+            }
+        }
+    }
+
+    function placeStone(x, y) {
+        if (isGameOver || board[y][x] !== 0) return;
+        board[y][x] = turn;
+        lastMove = { x, y };
+        moveHistory.push({ x, y, p: turn });
+        draw();
+
+        if (checkWinStrict(x, y, turn)) {
+            isGameOver = true;
+            setTimeout(() => alert((turn === 1 ? "흑" : "백") + " 승리!"), 100);
+            document.getElementById("startModal").style.display = "flex";
+            return;
+        }
+        turn = 3 - turn;
+        updateStatus((turn === 1 ? "흑" : "백") + "의 차례");
+        if (mode === "ai" && turn === 2) triggerAi();
+    }
+
     function triggerAi() {
-        updateStatus("AI가 생각 중...");
         setTimeout(() => {
-            let best;
-            if (level === 'easy') best = getHeuristicMove(0.5);
-            else if (level === 'medium') best = getHeuristicMove(1.0);
-            else best = getMinimaxMove(level === 'hard' ? 3 : 5);
-            
-            if (best) placeStone(best.x, best.y);
+            let best = { x: -1, y: -1 }, maxS = -1;
+            for (let y = 0; y < SIZE; y++) {
+                for (let x = 0; x < SIZE; x++) {
+                    if (board[y][x] === 0) {
+                        let s = Math.random() * 10; // 단순 예시용 가중치
+                        if (s > maxS) { maxS = s; best = { x, y }; }
+                    }
+                }
+            }
+            placeStone(best.x, best.y);
         }, 600);
     }
 
-    function getHeuristicMove(weight) {
-        let maxS = -1, best = {x:7, y:7};
-        for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
-            if (board[y][x] === 0) {
-                if (checkRenjuForbidden(x, y, turn)) continue;
-                let s = evaluatePoint(x, y, turn) + evaluatePoint(x, y, 3-turn) * weight;
-                if (s > maxS) { maxS = s; best = {x, y}; }
-            }
+    function handleInput(e) {
+        if (isGameOver || (mode === "ai" && turn === 2)) return;
+        const rect = c.getBoundingClientRect();
+        const cX = e.touches ? e.touches[0].clientX : e.clientX;
+        const cY = e.touches ? e.touches[0].clientY : e.clientY;
+        const scale = 600 / rect.width;
+        const x = Math.round(((cX - rect.left) * scale) / cell) - 1;
+        const y = Math.round(((cY - rect.top) * scale) / cell) - 1;
+        
+        if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && board[y][x] === 0) {
+            const forbidden = checkRenjuForbidden(x, y, turn);
+            if (forbidden) { updateStatus(`⚠️ ${forbidden}`, true); return; }
+            placeStone(x, y);
         }
-        return best;
     }
 
-    function evaluatePoint(x, y, t) {
-        let score = 0;
-        const ds = [[1,0],[0,1],[1,1],[1,-1]];
-        for (let [dx, dy] of ds) {
-            let count = 1, open = 0;
-            // 로직 단순화: 주변 돌 개수에 따라 점수 부여
-            for(let i=1; i<5; i++) {
-                if(board[y+dy*i]?.[x+dx*i] === t) count++;
-                else if(board[y+dy*i]?.[x+dx*i] === 0) { open++; break; }
-                else break;
-            }
-            score += Math.pow(10, count);
-        }
-        return score;
-    }
-
-    // 미니맥스 알고리즘 (간략 버전)
-    function getMinimaxMove(depth) {
-        return getHeuristicMove(1.2); // 깊은 탐색 로직은 성능상 가중치 휴리스틱으로 대체 가능
-    }
-
-    /* --- 6. 드로잉 및 UI 제어 --- */
-    function draw() {
-        ctx.clearRect(0, 0, 600, 600);
-        ctx.strokeStyle = "#4a3419"; ctx.lineWidth = 1;
-        for (let i=1; i<=SIZE; i++) {
-            ctx.beginPath(); ctx.moveTo(cell, i*cell); ctx.lineTo(SIZE*cell, i*cell); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(i*cell, cell); ctx.lineTo(i*cell, SIZE*cell); ctx.stroke();
-        }
-        board.forEach((row, y) => row.forEach((v, x) => {
-            if (v !== 0) {
-                ctx.beginPath();
-                ctx.arc((x+1)*cell, (y+1)*cell, cell*0.4, 0, Math.PI*2);
-                ctx.fillStyle = v === 1 ? "#000" : "#fff";
-                ctx.fill();
-                if (moveHistory.length > 0 && moveHistory[moveHistory.length-1].x === x && moveHistory[moveHistory.length-1].y === y) {
-                    ctx.strokeStyle = "red"; ctx.lineWidth = 2; ctx.stroke();
-                }
-            }
-        }));
-    }
-
-    function updateStatus(msg, isWarn = false) {
-        const el = document.getElementById('status');
-        el.innerText = msg;
-        el.style.color = isWarn ? "var(--danger)" : "#fff";
-    }
-
-    function undo() {
-        if (moveHistory.length < 2 || isGameOver) return;
-        for(let i=0; i<2; i++) {
-            let last = moveHistory.pop();
-            if (last) board[last.y][last.x] = 0;
-        }
+    function startGame() {
+        initBoard();
+        turn = 1; isGameOver = false; lastMove = null; moveHistory = [];
+        document.getElementById("startModal").style.display = "none";
+        updateStatus("흑의 차례 (게임 시작)");
         draw();
     }
 
-    function endGame(w) {
-        isGameOver = true;
-        document.getElementById('finishResultText').innerText = (w === 1 ? "흑" : "백") + " 승리!";
-        document.getElementById('finishConfirmModal').style.display = 'flex';
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
-    }
+    function updateStatus(msg) { document.getElementById("status").innerText = msg; }
+    function undo() { if(moveHistory.length > 0) { let l = moveHistory.pop(); board[l.y][l.x] = 0; turn = l.p; draw(); } }
 
-    function updateUI() {
-        document.getElementById('aiBtn').classList.toggle('active', mode==='ai');
-        document.getElementById('friendBtn').classList.toggle('active', mode==='friend');
-        document.getElementById('colorBlack').classList.toggle('active', playerColor===1);
-        document.getElementById('colorWhite').classList.toggle('active', playerColor===2);
-        document.getElementById('aiOptions').style.display = mode === 'ai' ? 'block' : 'none';
-        
-        ['easy', 'mid', 'hard', 'imp'].forEach(id => {
-            const levelMap = {easy:'easy', mid:'medium', hard:'hard', imp:'impossible'};
-            document.getElementById(id+'Btn').classList.toggle('active', level === levelMap[id]);
-        });
-    }
-
-    c.addEventListener('mousedown', (e) => {
-        const rect = c.getBoundingClientRect();
-        const scale = 600 / rect.width;
-        const x = Math.round(((e.clientX - rect.left) * scale) / cell) - 1;
-        const y = Math.round(((e.clientY - rect.top) * scale) / cell) - 1;
-        if (x >= 0 && x < SIZE && y >= 0 && y < SIZE) placeStone(x, y);
-    });
-
-    updateUI();
+    c.addEventListener('mousedown', handleInput);
+    c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, { passive: false });
 </script>
 </body>
 </html>
