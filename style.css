@@ -304,6 +304,8 @@ footer {
 .advertisement {
     max-width: 600px;
     min-width: none;
+    width: 75%;
+    height: auto;
     margin-bottom: auto;
     overflow: hidden;
 }
