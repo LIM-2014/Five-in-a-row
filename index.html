@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta property="og:title" content="오목 마스터: 렌주룰">
+    <meta property="og:description" content="뛰어난 실력의 AI와 오목 한판 즐겨보세요!">
+    <meta property="og:image" content="https://raw.githubusercontent.com/LIM-2014/Five-in-a-row/refs/heads/main/snsPreviewImage.png">
+    <meta property="og:url" content="https://aiomok.kro.kr">
+    <link rel="icon" type="image/png" href="Favicon96.png">
+    <link rel="manifest" href="manifest.json">
+    <link rel="apple-touch-icon" href="Favicon512.png">
+    <meta name="theme-color" content="#000000">
+    <link rel="stylesheet" href="style.css">
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover"/>
+    <title>오목 마스터: 렌주룰</title>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+</head>
+<body>
+<img class="advertisement" src="ad_1.png" alt="어버이날 이미지">
+
+<div id="install-banner">
+    <div class="install-text">앱으로 설치하여 더 쾌적하게 즐기세요</div>
+    <div style="display: flex; align-items: center; gap: 8px;">
+        <button id="install-confirm-btn">설치</button>
+        <button id="install-close-btn">&times;</button>
+    </div>
+</div>
+
+
+
+<div id="startModal">
+    <div class="box">
+        <div class="title">오목 마스터: 렌주룰</div>
+        <div class="option-group">
+            <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
+            <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>
+        </div>
+        <div id="aiOptions">
+            <div class="option-group">
+                <button class="btn active" id="colorBlack" onclick="playerColor=1; updateUI();">흑 (선수)</button>
+                <button class="btn" id="colorWhite" onclick="playerColor=2; updateUI();">백 (후수)</button>
+            </div>
+            <div class="option-group">
+                <button class="btn active" id="easyBtn" onclick="level='easy'; updateUI();">초보</button>
+                <button class="btn" id="midBtn" onclick="level='medium'; updateUI();">중수</button>
+                <button class="btn" id="hardBtn" onclick="level='hard'; updateUI();">고수</button>
+                <button class="btn" id="impBtn" onclick="level='impossible'; updateUI();">불가능</button>
+            </div>
+        </div>
+        
+        <div style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 15px;">
+            <div class="setting-label">착수 방식</div>
+            <div class="option-group">
+                <button class="btn" id="directModeBtn" onclick="setPlaceMode('direct')">즉시 착수</button>
+                <button class="btn" id="confirmModeBtn" onclick="setPlaceMode('confirm')">확인 후 착수</button>
+            </div>
+        </div>
+
+        <button class="btn sub" onclick="showHistory()">기보 관리 (최대 5개)</button>
+        <button id="startBtn" class="btn active" style="background:var(--dark); margin-top:15px;" onclick="startGame()">게임 시작</button>
+    </div>
+</div>
+
+<div id="actionConfirmModal">
+    <div class="box" style="max-width: 280px;">
+        <div class="title" id="actionTitle" style="font-size:1.1rem;"></div>
+        <div id="actionDesc" style="margin-bottom:15px; font-size: 14px; color: #666;"></div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn active" id="confirmActionBtn" style="flex:1;">예</button>
+            <button class="btn" style="flex:1; background:#ccc;" onclick="closeActionConfirm()">아니오</button>
+        </div>
+    </div>
+</div>
+
+<div id="historyModal">
+    <div class="box">
+        <div class="title">기보 기록</div>
+        <div id="historyList" style="max-height: 280px; overflow-y: auto; margin-bottom: 15px; text-align: left;"></div>
+        <div style="display:flex; gap:5px;">
+            <button class="btn danger" style="flex:1;" onclick="openDeleteConfirm()">전체 삭제</button>
+            <button class="btn active" style="flex:1;" onclick="document.getElementById('historyModal').style.display='none'">닫기</button>
+        </div>
+    </div>
+</div>
+
+<div id="deleteConfirmModal">
+    <div class="box" style="max-width: 280px;">
+        <div class="title" style="font-size:1.1rem;">기보를 모두 삭제할까요?</div>
+        <div style="display:flex; gap:10px;">
+            <button class="btn danger" style="flex:1;" onclick="clearAllHistory()">삭제</button>
+            <button class="btn" style="flex:1; background:#ccc;" onclick="closeDeleteConfirm()">취소</button>
+        </div>
+    </div>
+</div>
+
+<div id="finishConfirmModal">
+    <div class="box" style="max-width: 280px;">
+        <div class="title">게임 종료</div>
+        <div id="finishResultText" style="margin-bottom:20px; font-weight: bold; color: var(--primary); font-size: 1.2rem;"></div>
+        <button id="recordBtn" class="btn active" onclick="viewFinalRecord()">복기 하기</button>
+        <button class="btn" style="margin-top:8px;" onclick="location.reload()">메인으로</button>
+    </div>
+</div>
+
+<div class="wrapper">
+    <div class="info-bar">
+        <div id="timer1" class="timer-box">∞</div>
+        <div id="status" class="status">오목 마스터: 렌주룰</div>
+        <div id="timer2" class="timer-box">∞</div>
+    </div>
+    <canvas id="c" width="600" height="600"></canvas>
+    <div class="control-panel">
+        <button id="undoBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askUndo()">무르기</button>
+        <button id="confirmPlaceBtn" class="btn" onclick="finalConfirmPlace()">착수하기</button>
+        <button id="mainGoBtn" class="btn" style="flex:1;" onclick="location.reload()">메인화면</button>
+        <button id="giveUpBtn" class="btn" style="flex:1; background:#fff; border:1px solid #ddd;" onclick="askGiveUp()">기권</button>
+    </div>
+</div>
+<footer>
+    <div class="footer-container">
+        <!-- 메인 링크 영역: 가시성을 위해 상단 배치 -->
+        <div class="footer-nav">
+            <a href="https://github.com/LIM-2014/Five-in-a-row" target="_blank" class="footer-link">Repository</a>
+            <span class="footer-sep"></span>
+            <span class="footer-link email-link" onclick="handleEmailContact('treetowood@naver.com')">Support & Feedback</span>
+        </div>
+
+        <!-- 하단 정보 영역: 작고 연하게 배치 -->
+        <div class="footer-info">
+            <span class="copyright">© 2026 <strong>Lim-2014</strong>. All rights reserved.</span>
+            <span class="no-collect">이메일 무단수집거부</span>
+        </div>
+    </div>
+</footer>
+<div id="toast" class="toast"></div>
+<script src="script.js"></script>
+</body>
+</html>

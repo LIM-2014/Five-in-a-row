@@ -1,0 +1,309 @@
+/* --- 변수 및 초기화 --- */
+:root {
+    --bg: #e9d6a7;
+    --primary: #2f6fed;
+    --success: #27ae60;
+    --dark: #333;
+    --danger: #e74c3c;
+    --impossible: #8e44ad;
+}
+
+* { 
+    box-sizing: border-box; 
+    -webkit-tap-highlight-color: transparent; 
+}
+
+body {
+    margin: 0; 
+    background: var(--bg); 
+    font-family: 'Pretendard', -apple-system, sans-serif;
+    display: flex; 
+    flex-direction: column;
+    align-items: center; 
+    justify-content: center;
+    min-height: 100dvh;
+    overflow: hidden; 
+    touch-action: none;
+}
+
+/* --- 레이아웃 --- */
+.wrapper {
+    display: flex; 
+    flex-direction: column; 
+    align-items: center;
+    width: 100%; 
+    max-width: 500px; 
+    padding: 15px;
+    padding-bottom: calc(60px + env(safe-area-inset-bottom, 20px));
+    flex: 1 0 auto;
+}
+
+/* --- 토스트 팝업 --- */
+.toast {
+    position: fixed;
+    bottom: 30px;
+    left: 50%;
+    transform: translateX(-50%) translateY(100px);
+    background: rgba(0, 0, 0, 0.85);
+    color: white;
+    padding: 12px 25px;
+    border-radius: 50px;
+    font-size: 14px;
+    font-weight: 500;
+    z-index: 12000;
+    transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.4s;
+    opacity: 0;
+    pointer-events: none;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+.toast.show {
+    transform: translateX(-50%) translateY(0);
+    opacity: 1;
+}
+
+/* --- 설치 배너 --- */
+#install-banner {
+    position: fixed;
+    bottom: 25px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: #ffffff;
+    padding: 10px 15px 10px 20px;
+    border-radius: 40px; 
+    box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    z-index: 11000;
+    display: none; 
+    align-items: center;
+    
+    /* 핵심 수정 부분 */
+    width: auto;           /* 콘텐츠 크기에 딱 맞게 조절 */
+    min-width: fit-content; /* 내용물만큼 너비 확보 */
+    max-width: 90%;        /* 화면폭 보다는 작게 */
+    justify-content: center; /* 중앙 정렬 (또는 flex-start) */
+    gap: 12px;             /* 문구와 버튼 사이의 간격을 직접 조절 (원하는 만큼 수정 가능) */
+    
+    border: 1px solid rgba(0,0,0,0.05);
+    animation: floatingPop 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.install-text {
+    font-size: 13px;
+    font-weight: 600;
+    color: #444;
+    white-space: nowrap; /* 줄바꿈 방지 */
+    flex: 0 1 auto;      /* 불필요하게 늘어나지 않도록 설정 */
+}
+
+/* 닫기 버튼(&times;)이 너무 멀어지는 걸 방지하기 위해 
+   버튼들을 묶는 그룹의 여백도 조정합니다. */
+#install-banner > div:last-child {
+    display: flex;
+    align-items: center;
+    gap: 8px; /* 설치 버튼과 X 버튼 사이 간격 */
+    flex-shrink: 0;
+}
+
+@keyframes floatingPop {
+    from { transform: translateX(-50%) translateY(50px); opacity: 0; }
+    to { transform: translateX(-50%) translateY(0); opacity: 1; }
+}
+
+.install-text {
+    font-size: 14px;
+    font-weight: 600;
+    color: #444;
+}
+
+#install-confirm-btn {
+    background: var(--success);
+    color: #ffffff;
+    border: none;
+    padding: 8px 18px;
+    border-radius: 20px;
+    cursor: pointer;
+    font-weight: 700;
+    font-size: 13px;
+    box-shadow: 0 2px 8px rgba(39, 174, 96, 0.3);
+}
+
+#install-close-btn {
+    background: none;
+    border: none;
+    color: #bbb;
+    cursor: pointer;
+    font-size: 22px;
+}
+
+/* --- 모달 시스템 --- */
+#startModal, #historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal {
+    position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+    background: rgba(0,0,0,0.7); z-index: 10000; padding: 20px;
+}
+
+#historyModal, #finishConfirmModal, #deleteConfirmModal, #actionConfirmModal { display: none; }
+
+.box {
+    background: #fff; width: 100%; max-width: 340px; padding: 25px;
+    border-radius: 24px; box-shadow: 0 20px 50px rgba(0,0,0,0.3); text-align: center;
+}
+
+.title { font-weight: 800; font-size: 1.4rem; margin-bottom: 20px; color: var(--dark); }
+
+/* --- 버튼 스타일 --- */
+.btn {
+    width: 100%; padding: 14px; margin: 6px 0; border-radius: 12px; border: none;
+    background: #f0f0f0; font-weight: 700; cursor: pointer; font-size: 15px; transition: 0.2s;
+}
+
+.btn.active { background: var(--primary); color: #fff; }
+
+.btn.active.imp-active { background: var(--impossible) !important; color: #fff; }
+
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+.btn.danger { background: var(--danger); color: #fff; }
+
+.btn.sub { background: #555; color: #fff; margin-top: 10px; }
+
+/* --- 기보 내역 및 개별 삭제 버튼 --- */
+.history-item {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; text-align: left;
+}
+
+.history-item:hover { background: #f9f9f9; }
+
+.history-item strong { display: block; font-size: 14px; color: var(--dark); }
+
+.history-item small { font-size: 11px; color: #999; }
+
+.del-btn {
+    background: var(--danger); color: #fff; border: none; padding: 6px 12px;
+    border-radius: 8px; font-size: 11px; font-weight: 800; cursor: pointer;
+    flex-shrink: 0; margin-left: 10px;
+}
+
+/* --- 인게임 UI --- */
+.setting-label { 
+    font-size: 11px; color: #aaa; text-align: left; display: block;
+    width: 100%; margin-bottom: 4px; padding-left: 4px; font-weight: 500;
+}
+
+.option-group { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+
+.option-group .btn { padding: 10px 2px; font-size: 11px; margin: 0; flex: 1; min-width: 60px; }
+
+canvas {
+    background: linear-gradient(135deg,#d8a45d,#c8924a); 
+    border: 4px solid #4a3419; border-radius: 12px; 
+    width: 100%; aspect-ratio: 1/1; touch-action: none;
+}
+
+.info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; justify-content: space-between; align-items: center; }
+
+.timer-box {
+    background: rgba(0,0,0,0.85); color: #fff; padding: 8px 14px; border-radius: 12px;
+    font-family: monospace; font-size: 16px; min-width: 75px; text-align: center;
+    border: 2px solid transparent; transition: 0.3s;
+}
+
+.timer-box.active { border-color: var(--primary); }
+
+.status {
+    flex: 1; background: var(--dark); color: #fff; padding: 10px; border-radius: 20px;
+    font-size: 13px; font-weight: bold; text-align: center;
+}
+
+.control-panel { display: flex; gap: 10px; width: 100%; margin-top: 15px; }
+
+#mainGoBtn { display: none; background: var(--dark); color: white; }
+
+#confirmPlaceBtn { display: none; background: var(--primary); color: white; flex: 1.5; }
+
+/* --- 최종 푸터 디자인 --- */
+footer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    /* 배경색과 일체감을 주면서도 블러 효과로 구분감 부여 */
+    background: rgba(233, 214, 167, 0.8); 
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(74, 52, 25, 0.1); /* 바둑판 선 색상 계열 사용 */
+    padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
+    z-index: 9000;
+    text-align: center;
+}
+
+.footer-container {
+    max-width: 500px;
+    margin: 0 auto;
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* 링크 스타일 */
+.footer-nav {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 12px;
+}
+
+.footer-link {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--primary); /* 기존 블루 포인트 컬러 활용 */
+    text-decoration: none;
+    transition: opacity 0.2s;
+}
+
+.footer-link:hover {
+    opacity: 0.7;
+    text-decoration: underline;
+}
+
+/* 구분선 점(Dot) 스타일 */
+.footer-sep::before {
+    content: "•";
+    color: #4a3419;
+    opacity: 0.3;
+    font-size: 10px;
+}
+
+/* 하단 세부 정보 */
+.footer-info {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    font-size: 10px;
+    color: #8a7a60; /* 배경보다 살짝 어두운 톤 */
+    opacity: 0.8;
+}
+
+.footer-info strong {
+    color: #4a3419;
+    font-weight: 600;
+}
+
+.no-collect {
+    letter-spacing: -0.5px;
+}
+
+/* 가로 모드 및 작은 화면 대응 */
+@media (max-height: 700px) {
+    footer {
+        padding: 8px 20px calc(8px + env(safe-area-inset-bottom, 0px));
+    }
+    .footer-container { gap: 3px; }
+}
+
+.advertisement {
+    max-width: 600px;
+    min-width: none;
+    margin-bottom: auto;
+    overflow: hidden;
+}
