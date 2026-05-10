@@ -31,6 +31,38 @@
 <div id="startModal">
     <div class="box">
         <div class="title">오목 마스터: 렌주룰</div>
+
+        <!-- 최근 5게임 승률 (바 그래프) -->
+        <div id="winratePanel" style="
+            background: #f7f3ec;
+            border-radius: 14px;
+            padding: 12px 16px 10px;
+            margin-bottom: 14px;
+            text-align: center;
+        ">
+            <div id="winrateEmpty" style="font-size:12px; color:#aaa; padding: 4px 0;">아직 AI 대전 기록이 없어요</div>
+            <div id="winrateContent" style="display:none;">
+                <div style="font-size:10px; color:#bbb; margin-bottom:10px; font-weight:600; letter-spacing:0.5px;">최근 5게임 · AI 대전</div>
+                <!-- 바 그래프 영역 -->
+                <div id="winrateIcons" style="
+                    display: flex;
+                    justify-content: center;
+                    align-items: flex-end;
+                    gap: 8px;
+                    height: 52px;
+                    margin-bottom: 6px;
+                "></div>
+                <!-- 승/패/무 + 승률 -->
+                <div style="display:flex; justify-content:center; align-items:center; gap:10px; flex-wrap:wrap;">
+                    <span id="winrateWin"  style="font-size:11px; color:#2f6fed; font-weight:700;"></span>
+                    <span id="winrateLose" style="font-size:11px; color:#e74c3c; font-weight:700;"></span>
+                    <span id="winrateDraw" style="font-size:11px; color:#aaa;    font-weight:700; display:none;"></span>
+                    <span style="color:#ddd; font-size:10px;">|</span>
+                    <span id="winratePct"  style="font-size:13px; color:#333; font-weight:800;"></span>
+                </div>
+            </div>
+        </div>
+
         <div class="option-group">
             <button class="btn active" id="aiBtn" onclick="mode='ai'; updateUI();">AI 대전</button>
             <button class="btn" id="friendBtn" onclick="mode='friend'; updateUI();">친구 대전</button>

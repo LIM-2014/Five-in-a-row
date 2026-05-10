@@ -269,6 +269,7 @@ function endGame(w) {
     if (timerInterval) clearInterval(timerInterval); 
     endReason = "정상종료";
     saveHistory(w, "정상종료");
+    renderWinRate();
     
     document.getElementById("finishResultText").innerText = (w === 1 ? '흑' : '백') + " 승리!";
     document.getElementById("finishConfirmModal").style.display = "flex";
@@ -285,26 +286,36 @@ function endByTimeout() {
     document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 시간초과 패배!";
     document.getElementById("finishConfirmModal").style.display = "flex";
     saveHistory(winner, "시간패");
+    renderWinRate();
 }
 
 function handleGiveUp() {
     if (isGameOver) return;
-    const winner = 3 - turn; 
-    isGameOver = true; 
+    isGameOver = true;
     endReason = "기권패";
-    document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 기권패!";
+
+    // AI 대전: 기권은 항상 플레이어 패 (turn이 AI로 넘어간 상태여도 플레이어가 기권한 것)
+    // 친구 대전: 기권 버튼을 누른 시점의 turn이 기권하는 플레이어
+    const loser  = (mode === 'ai') ? playerColor : turn;
+    const winner = 3 - loser;
+
+    document.getElementById("finishResultText").innerText = (loser === 1 ? "흑" : "백") + " 기권패!";
     document.getElementById("finishConfirmModal").style.display = "flex";
     saveHistory(winner, "기권패");
+    renderWinRate();
 }
 
+// ─── 무르기 (버그 수정) ───────────────────────────────────────────────────────
+// 수정 전 문제:
+//   lastPlayer = moveHistory 마지막 항목의 플레이어(=AI 백)로 구한 뒤
+//   turn = lastPlayer 로 설정해버려서 AI 차례가 되고 undoCounts도 AI 기준으로 차감됨.
+// 수정 후:
+//   AI 대전 → 무르기 후 항상 playerColor 차례로 복귀, 카운트도 playerColor 기준
+//   친구 대전 → 제거된 돌의 플레이어 차례로 복귀 (기존 동작 유지)
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
     if (aiTimeout) { clearTimeout(aiTimeout); aiTimeout = null; }
-
-    const lastAction = moveHistory[moveHistory.length - 1];
-    const lastPlayer = lastAction.p;
-    undoCounts[lastPlayer]++;
 
     let stepsToRemove = (mode === "ai") ? 2 : 1;
     if (mode === "ai" && moveHistory.length < 2) stepsToRemove = 1;
@@ -317,13 +328,23 @@ function undo() {
     lastMove = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
-    
-    turn = lastPlayer;
+
+    if (mode === "ai") {
+        // AI 대전: 무르기는 항상 플레이어 차례로 돌아옴
+        turn = playerColor;
+        undoCounts[playerColor]++;
+    } else {
+        // 친구 대전: 마지막으로 제거된 돌의 플레이어 차례로 돌아옴
+        // moveHistory에서 마지막으로 남은 수의 다음 플레이어가 두어야 함
+        const nextTurn = moveHistory.length > 0 ? 3 - moveHistory[moveHistory.length - 1].p : 1;
+        undoCounts[nextTurn]++;
+        turn = nextTurn;
+    }
 
     draw();
     startTurn();
-    const playerName = (lastPlayer === 1) ? "흑" : "백";
-    updateStatus(`${playerName} 무르기 완료 (남은 기회: ${3 - undoCounts[lastPlayer]}회)`, true);
+    const playerName = (turn === 1) ? "흑" : "백";
+    updateStatus(`${playerName} 무르기 완료 (남은 기회: ${3 - undoCounts[turn]}회)`, true);
 }
 
 function setupConfirmBtn(callback) {
@@ -337,9 +358,10 @@ function askUndo() {
     if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
     if (moveHistory.length === 0) return;
 
-    const lastPlayer = moveHistory[moveHistory.length - 1].p;
-    const currentCount = undoCounts[lastPlayer];
-    const playerName = (lastPlayer === 1) ? "흑" : "백";
+    // AI 대전은 항상 플레이어 기준, 친구 대전은 마지막으로 돌을 놓은 플레이어 기준
+    const actingPlayer = (mode === "ai") ? playerColor : moveHistory[moveHistory.length - 1].p;
+    const currentCount = undoCounts[actingPlayer];
+    const playerName = (actingPlayer === 1) ? "흑" : "백";
 
     if (currentCount >= 3) { showToast(`⚠️ ${playerName}님 무르기 제한 초과 (3/3)`); return; }
 
@@ -577,7 +599,17 @@ function getPointBetter(x, y, t) {
 // --- 기보 관리 ---
 function saveHistory(w, reason){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-    h.unshift({ date:new Date().toLocaleString(), winner:w===1?'흑':'백', moves:moveHistory.length, data:[...moveHistory], isImp: (level==='impossible' && mode === 'ai'), reason: reason });
+    h.unshift({
+        date: new Date().toLocaleString(),
+        winner: w === 1 ? '흑' : '백',
+        moves: moveHistory.length,
+        data: [...moveHistory],
+        isImp: (level === 'impossible' && mode === 'ai'),
+        reason: reason,
+        mode: mode,                          // 'ai' | 'friend'
+        playerColor: playerColor,            // 1=흑, 2=백
+        playerWon: (mode === 'ai') ? (w === playerColor) : null  // AI 대전만 의미 있음
+    });
     localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0,5)));
 }
 
@@ -593,13 +625,13 @@ function showHistory(){
     document.getElementById("historyModal").style.display="flex";
 }
 
-function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); showHistory(); }
+function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); renderWinRate(); showHistory(); }
 
 function openDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'flex'; }
 
 function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'none'; }
 
-function clearAllHistory(){ localStorage.removeItem("omok_final_history"); closeDeleteConfirm(); showHistory(); showToast("모든 기보가 삭제되었습니다."); }
+function clearAllHistory(){ localStorage.removeItem("omok_final_history"); closeDeleteConfirm(); showHistory(); renderWinRate(); showToast("모든 기보가 삭제되었습니다."); }
 
 function replay(idx){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
@@ -637,4 +669,101 @@ document.getElementById('install-confirm-btn')?.addEventListener('click', async 
 
 document.getElementById('install-close-btn')?.addEventListener('click', () => { document.getElementById('install-banner').style.display = 'none'; });
 
+// --- 최근 5게임 승률 렌더링 (AI 대전만, 플레이어 기준) ---
+function renderWinRate() {
+    const all = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
+
+    const emptyEl   = document.getElementById("winrateEmpty");
+    const contentEl = document.getElementById("winrateContent");
+    const iconsEl   = document.getElementById("winrateIcons");
+    const winEl     = document.getElementById("winrateWin");
+    const loseEl    = document.getElementById("winrateLose");
+    const drawEl    = document.getElementById("winrateDraw");
+    const pctEl     = document.getElementById("winratePct");
+
+    if (!emptyEl) return;
+
+    // AI 대전 기록만 필터 (mode 필드 없는 구버전 기록은 제외)
+    const aiGames = all.filter(item => item.mode === 'ai').slice(0, 5);
+
+    if (aiGames.length === 0) {
+        emptyEl.style.display   = "block";
+        contentEl.style.display = "none";
+        return;
+    }
+
+    emptyEl.style.display   = "none";
+    contentEl.style.display = "block";
+
+    let wins = 0, losses = 0, draws = 0;
+    iconsEl.innerHTML = "";
+
+    // 오래된 순(왼쪽) → 최신(오른쪽)
+    const ordered = [...aiGames].reverse();
+
+    // 바 높이: 승=44px(높), 패=14px(낮), 무=28px(중간)
+    const barConfig = {
+        win:  { height: 44, color: '#2f6fed', label: 'W' },
+        lose: { height: 14, color: '#e74c3c', label: 'L' },
+        draw: { height: 28, color: '#c8a96e', label: 'D' },
+    };
+
+    ordered.forEach((item, i) => {
+        let type;
+        if (item.playerWon === null || item.playerWon === undefined) {
+            type = 'draw'; draws++;
+        } else if (item.playerWon === true) {
+            type = 'win';  wins++;
+        } else {
+            type = 'lose'; losses++;
+        }
+
+        const cfg = barConfig[type];
+        const isLatest = (i === ordered.length - 1);
+
+        const wrap = document.createElement("div");
+        wrap.style.cssText = `
+            display:flex; flex-direction:column;
+            align-items:center; justify-content:flex-end;
+            gap:3px; height:52px;
+        `;
+
+        const bar = document.createElement("div");
+        bar.style.cssText = `
+            width:26px; height:${cfg.height}px;
+            background:${cfg.color};
+            border-radius:6px 6px 3px 3px;
+            opacity:${isLatest ? '1' : '0.45'};
+            box-shadow:${isLatest ? `0 2px 8px ${cfg.color}55` : 'none'};
+        `;
+
+        const lbl = document.createElement("span");
+        lbl.style.cssText = `
+            font-size:9px; font-weight:800;
+            color:${isLatest ? cfg.color : '#ccc'};
+        `;
+        lbl.textContent = cfg.label;
+
+        wrap.appendChild(bar);
+        wrap.appendChild(lbl);
+        iconsEl.appendChild(wrap);
+    });
+
+    const decided = wins + losses;
+    const pct = decided > 0 ? Math.round((wins / decided) * 100) : 0;
+
+    winEl.textContent  = `${wins}승`;
+    loseEl.textContent = `${losses}패`;
+
+    if (draws > 0) {
+        drawEl.style.display = "inline";
+        drawEl.textContent   = `${draws}무`;
+    } else {
+        drawEl.style.display = "none";
+    }
+
+    pctEl.textContent = `승률 ${pct}%`;
+}
+
+renderWinRate();
 updateUI();
