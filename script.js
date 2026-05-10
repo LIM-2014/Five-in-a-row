@@ -293,16 +293,19 @@ function handleGiveUp() {
     saveHistory(winner, "기권패");
 }
 
-// --- 무르기 시스템 ---
+// --- 무르기 시스템 (수정 버전) ---
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
     if (aiTimeout) { clearTimeout(aiTimeout); aiTimeout = null; }
 
-    // 현재 요청한 플레이어의 카운트 증가
-    const undoPlayer = (mode === "ai") ? playerColor : turn;
-    undoCounts[undoPlayer]++;
+    // 1. 무르기를 적용받을 대상(방금 돌을 둔 사람)을 찾습니다.
+    const lastPlayer = moveHistory[moveHistory.length - 1].p;
+    
+    // 2. 그 플레이어의 무르기 횟수를 증가시킵니다.
+    undoCounts[lastPlayer]++;
 
+    // 3. 돌을 제거합니다. (AI 모드는 2수, 친구 모드는 1수)
     let stepsToRemove = (mode === "ai") ? 2 : 1;
     if (mode === "ai" && moveHistory.length < 2) stepsToRemove = 1;
 
@@ -315,35 +318,32 @@ function undo() {
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
     
-    if (mode === "ai") turn = playerColor;
-    else turn = 3 - turn;
+    // 4. 턴을 돌려줍니다.
+    // 방금 둔 사람(lastPlayer)의 차례로 다시 바꿉니다.
+    turn = lastPlayer;
 
     draw();
     startTurn();
-    const playerName = (undoPlayer === 1) ? "흑" : "백";
-    updateStatus(`${playerName} 무르기 완료 (${undoCounts[undoPlayer]}/3)`, true);
-}
-
-function setupConfirmBtn(callback) {
-    const oldBtn = document.getElementById("confirmActionBtn");
-    const newBtn = oldBtn.cloneNode(true);
-    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
-    newBtn.onclick = () => { callback(); closeActionConfirm(); };
+    
+    const playerName = (lastPlayer === 1) ? "흑" : "백";
+    updateStatus(`${playerName} 무르기 완료 (남은 기회: ${3 - undoCounts[lastPlayer]}/3)`, true);
 }
 
 function askUndo() {
-    if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
-    if (moveHistory.length === 0) return;
+    if (isGameOver || (level === 'impossible' && mode === 'ai') || moveHistory.length === 0) return;
+    
+    // 방금 돌을 둔 플레이어를 확인합니다.
+    const lastPlayer = moveHistory[moveHistory.length - 1].p;
+    const currentCount = undoCounts[lastPlayer];
+    const playerName = (lastPlayer === 1) ? "흑" : "백";
 
-    // 현재 턴 플레이어의 개별 횟수 확인
-    const undoPlayer = (mode === "ai") ? playerColor : turn;
-    const currentCount = undoCounts[undoPlayer];
-    const playerName = (undoPlayer === 1) ? "흑" : "백";
-
-    if (currentCount >= 3) { showToast(`⚠️ ${playerName} 무르기 제한 초과 (3/3)`); return; }
+    if (currentCount >= 3) { 
+        showToast(`⚠️ ${playerName}님은 무르기 기회를 모두 사용했습니다.`); 
+        return; 
+    }
 
     document.getElementById("actionTitle").innerText = "무르기 확인";
-    document.getElementById("actionDesc").innerText = `${playerName}님, 무르기를 사용하시겠습니까?\n(현재 ${currentCount}/3회 사용됨)`;
+    document.getElementById("actionDesc").innerText = `${playerName}님의 방금 수를 무르시겠습니까?\n(사용 후 남은 기회: ${2 - currentCount}회)`;
     setupConfirmBtn(undo);
     document.getElementById("actionConfirmModal").style.display = "flex";
 }
