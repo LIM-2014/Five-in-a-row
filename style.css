@@ -301,6 +301,20 @@ footer {
     .footer-container { gap: 3px; }
 }
 
+/* AI 생각 중일 때 상태 바 스타일 */
+.status.thinking {
+    border: 2px solid #007bff; /* 파란색 테두리 */
+    border-radius: 8px;
+    animation: pulse-blue 1.5s infinite ease-in-out;
+}
+
+/* 부드럽게 페이드 인 아웃 되는 효과 */
+@keyframes pulse-blue {
+    0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); opacity: 1; }
+    50% { box-shadow: 0 0 10px 5px rgba(0, 123, 255, 0.3); opacity: 0.8; }
+    100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); opacity: 1; }
+}
+
 .advertisement {
     max-width: 600px;
     min-width: none;

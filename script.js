@@ -1,12 +1,7 @@
-/**
- * 오목 마스터: 렌주룰 (Gomoku Master: Renju Rules)
- * 최종 통합 소스 코드 (플레이어별 독립 무르기 및 기보 삭제 보정)
- */
-
 // --- 전역 변수 및 초기화 ---
 let mode = "ai", level = "easy", board = [], turn = 1, isGameOver = false, lastMove = null, playerColor = 1;
 let currentLimit = 20, timerInterval, moveHistory = [], endReason = "";
-let undoCounts = { 1: 0, 2: 0 }; // 핵심: 흑(1)과 백(2) 각각의 무르기 횟수 관리
+let undoCounts = { 1: 0, 2: 0 }; 
 let statusTimeout = null;
 let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct"; 
 let tempMove = null;
@@ -28,11 +23,10 @@ function startGame() {
     isGameOver = false; 
     turn = 1; 
     endReason = ""; 
-    undoCounts = { 1: 0, 2: 0 }; // 시작 시 각 플레이어 횟수 초기화
+    undoCounts = { 1: 0, 2: 0 }; 
     tempMove = null;
     lastMove = null;
 
-    // UI 정리
     document.getElementById("startModal").style.display = "none";
     document.getElementById("mainGoBtn").style.display = "none";
     document.getElementById("confirmPlaceBtn").style.display = "none";
@@ -75,7 +69,9 @@ function updateUI() {
     ['easy', 'medium', 'hard', 'impossible'].forEach(l => {
         const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
         const el = document.getElementById(id);
-        if (el) el.classList.toggle("active", level === l);
+        if (el) {
+            el.classList.toggle("active", level === l);
+        }
     });
 
     document.getElementById("directModeBtn")?.classList.toggle("active", placeMode === 'direct');
@@ -157,6 +153,7 @@ function updateStatus(msg, isPriority = false) {
     if (!s) return;
     if (isGameOver && !msg) return;
     
+    // 기본적으로 클래스 제거
     s.classList.remove("thinking");
 
     if (msg) {
@@ -166,7 +163,8 @@ function updateStatus(msg, isPriority = false) {
     }
 
     if (mode === "ai" && turn !== playerColor) {
-        s.innerText = "AI 생각 중..."; s.classList.add("thinking");
+        s.innerText = "AI 생각 중..."; 
+        s.classList.add("thinking"); // CSS 애니메이션 작동
     } else {
         s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
     }
@@ -177,17 +175,22 @@ function updateTimerUI() {
     for (let i = 1; i <= 2; i++) {
         const tEl = document.getElementById(`timer${i}`);
         if (!tEl) continue;
-        const isCurrent = (turn === i);
-        if (isCurrent) {
+        
+        const isCurrentTurn = (turn === i);
+        tEl.style.opacity = "1";
+        tEl.style.color = "#fff"; 
+        
+        if (isCurrentTurn) {
+            tEl.style.fontWeight = "bold";
             if (isImp) {
                 tEl.innerText = `00:${String(Math.max(0, currentLimit)).padStart(2, '0')}`;
-                if (currentLimit <= 5) tEl.style.color = "red"; else tEl.style.color = "inherit";
-            } else { tEl.innerText = `∞`; tEl.style.color = "inherit"; }
-            tEl.style.fontWeight = "bold";
+                if (currentLimit <= 5) tEl.style.color = "#ff4d4d";
+            } else {
+                tEl.innerText = `∞`;
+            }
         } else {
-            tEl.innerText = isImp ? `00:20` : `∞`;
             tEl.style.fontWeight = "normal";
-            tEl.style.color = "#ccc";
+            tEl.innerText = isImp ? `00:20` : `∞`;
         }
     }
 }
@@ -199,6 +202,7 @@ function handleInput(e) {
     const rect = c.getBoundingClientRect();
     const cX = e.touches ? e.touches[0].clientX : e.clientX;
     const cY = e.touches ? e.touches[0].clientY : e.clientY;
+    
     const scaleX = c.width / rect.width;
     const scaleY = c.height / rect.height;
     
@@ -293,19 +297,15 @@ function handleGiveUp() {
     saveHistory(winner, "기권패");
 }
 
-// --- 무르기 시스템 (수정 버전) ---
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
     if (aiTimeout) { clearTimeout(aiTimeout); aiTimeout = null; }
 
-    // 1. 무르기를 적용받을 대상(방금 돌을 둔 사람)을 찾습니다.
-    const lastPlayer = moveHistory[moveHistory.length - 1].p;
-    
-    // 2. 그 플레이어의 무르기 횟수를 증가시킵니다.
+    const lastAction = moveHistory[moveHistory.length - 1];
+    const lastPlayer = lastAction.p;
     undoCounts[lastPlayer]++;
 
-    // 3. 돌을 제거합니다. (AI 모드는 2수, 친구 모드는 1수)
     let stepsToRemove = (mode === "ai") ? 2 : 1;
     if (mode === "ai" && moveHistory.length < 2) stepsToRemove = 1;
 
@@ -318,32 +318,33 @@ function undo() {
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
     
-    // 4. 턴을 돌려줍니다.
-    // 방금 둔 사람(lastPlayer)의 차례로 다시 바꿉니다.
     turn = lastPlayer;
 
     draw();
     startTurn();
-    
     const playerName = (lastPlayer === 1) ? "흑" : "백";
-    updateStatus(`${playerName} 무르기 완료 (남은 기회: ${3 - undoCounts[lastPlayer]}/3)`, true);
+    updateStatus(`${playerName} 무르기 완료 (남은 기회: ${3 - undoCounts[lastPlayer]}회)`, true);
+}
+
+function setupConfirmBtn(callback) {
+    const oldBtn = document.getElementById("confirmActionBtn");
+    const newBtn = oldBtn.cloneNode(true);
+    oldBtn.parentNode.replaceChild(newBtn, oldBtn);
+    newBtn.onclick = () => { callback(); closeActionConfirm(); };
 }
 
 function askUndo() {
-    if (isGameOver || (level === 'impossible' && mode === 'ai') || moveHistory.length === 0) return;
-    
-    // 방금 돌을 둔 플레이어를 확인합니다.
+    if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
+    if (moveHistory.length === 0) return;
+
     const lastPlayer = moveHistory[moveHistory.length - 1].p;
     const currentCount = undoCounts[lastPlayer];
     const playerName = (lastPlayer === 1) ? "흑" : "백";
 
-    if (currentCount >= 3) { 
-        showToast(`⚠️ ${playerName}님은 무르기 기회를 모두 사용했습니다.`); 
-        return; 
-    }
+    if (currentCount >= 3) { showToast(`⚠️ ${playerName}님 무르기 제한 초과 (3/3)`); return; }
 
     document.getElementById("actionTitle").innerText = "무르기 확인";
-    document.getElementById("actionDesc").innerText = `${playerName}님의 방금 수를 무르시겠습니까?\n(사용 후 남은 기회: ${2 - currentCount}회)`;
+    document.getElementById("actionDesc").innerText = `${playerName}님의 방금 수를 무르시겠습니까?\n(남은 기회: ${3 - currentCount}회)`;
     setupConfirmBtn(undo);
     document.getElementById("actionConfirmModal").style.display = "flex";
 }
@@ -473,7 +474,6 @@ function getMinimaxMove(depth) {
     let bestScore = -Infinity; let move = {x: -1, y: -1}; let candidates = [];
     let winMove = findImmediateWin(turn); if(winMove) return winMove;
     let threatMove = findImmediateWin(3-turn); if(threatMove) return threatMove;
-
     for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
         if(board[y][x] === 0) {
             if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
