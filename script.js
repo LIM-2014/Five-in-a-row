@@ -1,12 +1,14 @@
 /**
- * script.js - 오목 마스터 최종 수정본 (기보 관리 로직 통합)
+ * 오목 마스터: 렌주룰 (Gomoku Master: Renju Rules)
+ * 최종 통합 소스 코드 (플레이어별 독립 무르기 및 기보 삭제 보정)
  */
 
 // --- 전역 변수 및 초기화 ---
 let mode = "ai", level = "easy", board = [], turn = 1, isGameOver = false, lastMove = null, playerColor = 1;
-let currentLimit = 20, timerInterval, moveHistory = [], undoCount = 0, endReason = "";
+let currentLimit = 20, timerInterval, moveHistory = [], endReason = "";
+let undoCounts = { 1: 0, 2: 0 }; // 핵심: 흑(1)과 백(2) 각각의 무르기 횟수 관리
 let statusTimeout = null;
-let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct"; // direct | confirm
+let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct"; 
 let tempMove = null;
 let aiTimeout = null;
 let deferredPrompt = null;
@@ -16,7 +18,7 @@ const c = document.getElementById("c");
 const ctx = c.getContext("2d");
 const cell = 600 / 16;
 
-// --- [핵심] 게임 시작 함수 ---
+// --- 게임 시작 함수 ---
 function startGame() {
     if (aiTimeout) clearTimeout(aiTimeout);
     if (timerInterval) clearInterval(timerInterval);
@@ -26,7 +28,7 @@ function startGame() {
     isGameOver = false; 
     turn = 1; 
     endReason = ""; 
-    undoCount = 0; 
+    undoCounts = { 1: 0, 2: 0 }; // 시작 시 각 플레이어 횟수 초기화
     tempMove = null;
     lastMove = null;
 
@@ -47,11 +49,9 @@ function startGame() {
     const gb = document.getElementById("giveUpBtn");
     if(gb) gb.style.display = "block";
     
-    startTurn(); 
     draw();
+    startTurn(); 
 }
-
-const resetGame = startGame;
 
 // --- UI 업데이트 로직 ---
 function updateUI() {
@@ -62,8 +62,8 @@ function updateUI() {
     
     const aiOpts = document.getElementById("aiOptions");
     if (aiOpts) {
-        if (mode === 'friend') aiOpts.classList.add("disabled");
-        else aiOpts.classList.remove("disabled");
+        if (mode === 'friend') aiOpts.style.opacity = "0.3";
+        else aiOpts.style.opacity = "1";
     }
 
     const sb = document.getElementById("startBtn");
@@ -75,10 +75,7 @@ function updateUI() {
     ['easy', 'medium', 'hard', 'impossible'].forEach(l => {
         const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
         const el = document.getElementById(id);
-        if (el) {
-            el.classList.toggle("active", level === l);
-            if (l === 'impossible') el.classList.toggle("imp-active", level === 'impossible' && mode === 'ai');
-        }
+        if (el) el.classList.toggle("active", level === l);
     });
 
     document.getElementById("directModeBtn")?.classList.toggle("active", placeMode === 'direct');
@@ -91,7 +88,7 @@ function setPlaceMode(m) {
     updateUI();
 }
 
-// --- 게임 엔진 및 보드 그리기 ---
+// --- 보드 그리기 ---
 function draw() {
     ctx.clearRect(0, 0, c.width, c.height);
     ctx.strokeStyle = "#4a3419"; ctx.lineWidth = 1;
@@ -124,7 +121,7 @@ function draw() {
             ctx.fillStyle = m.p === 1 ? "#fff" : "#000"; ctx.fillText(i + 1, (m.x + 1) * cell, (m.y + 1) * cell);
         });
     } else if (lastMove) {
-        ctx.fillStyle = (level === 'impossible' && mode === 'ai') ? "var(--impossible)" : "#ff4d4d";
+        ctx.fillStyle = (level === 'impossible' && mode === 'ai') ? "#8e44ad" : "#ff4d4d";
         ctx.beginPath(); ctx.arc((lastMove.x + 1) * cell, (lastMove.y + 1) * cell, 6, 0, Math.PI * 2); ctx.fill();
     }
 }
@@ -149,8 +146,9 @@ function startTurn() {
             if (currentLimit <= 0) { clearInterval(timerInterval); endByTimeout(); }
         }, 1000);
     } else updateTimerUI();
+    
     updateStatus();
-    if (mode === "ai" && turn !== playerColor) triggerAi();
+    if (mode === "ai" && turn !== playerColor && !isGameOver) triggerAi();
 }
 
 function updateStatus(msg, isPriority = false) {
@@ -158,8 +156,8 @@ function updateStatus(msg, isPriority = false) {
     const s = document.getElementById("status");
     if (!s) return;
     if (isGameOver && !msg) return;
-    const isImp = (level === 'impossible' && mode === 'ai');
-    s.classList.remove("thinking", "imp-text");
+    
+    s.classList.remove("thinking");
 
     if (msg) {
         s.innerText = msg;
@@ -169,7 +167,6 @@ function updateStatus(msg, isPriority = false) {
 
     if (mode === "ai" && turn !== playerColor) {
         s.innerText = "AI 생각 중..."; s.classList.add("thinking");
-        if (isImp) s.classList.add("imp-text");
     } else {
         s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
     }
@@ -184,24 +181,24 @@ function updateTimerUI() {
         if (isCurrent) {
             if (isImp) {
                 tEl.innerText = `00:${String(Math.max(0, currentLimit)).padStart(2, '0')}`;
-                tEl.classList.add("imp-border");
-                if (currentLimit <= 5) tEl.classList.add("warning"); else tEl.classList.remove("warning");
-            } else { tEl.innerText = `∞`; tEl.classList.remove("warning", "imp-border"); }
-            tEl.classList.add("active");
+                if (currentLimit <= 5) tEl.style.color = "red"; else tEl.style.color = "inherit";
+            } else { tEl.innerText = `∞`; tEl.style.color = "inherit"; }
+            tEl.style.fontWeight = "bold";
         } else {
             tEl.innerText = isImp ? `00:20` : `∞`;
-            tEl.classList.remove("active", "imp-border", "warning");
+            tEl.style.fontWeight = "normal";
+            tEl.style.color = "#ccc";
         }
     }
 }
 
 // --- 입력 처리 ---
 function handleInput(e) {
-    if (isGameOver || (mode === "ai" && turn !== playerColor)) return;
+    if (isGameOver || (mode === "ai" && (turn !== playerColor || aiTimeout))) return;
+
     const rect = c.getBoundingClientRect();
     const cX = e.touches ? e.touches[0].clientX : e.clientX;
     const cY = e.touches ? e.touches[0].clientY : e.clientY;
-    
     const scaleX = c.width / rect.width;
     const scaleY = c.height / rect.height;
     
@@ -209,9 +206,14 @@ function handleInput(e) {
     const y = Math.round(((cY - rect.top) * scaleY) / cell) - 1;
 
     if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && board[y][x] === 0) {
+        const forbidden = checkRenjuForbidden(x, y, turn);
+        if (forbidden) { 
+            showToast(`⚠️ ${forbidden} (흑 금수)`); 
+            updateStatus(`⚠️ ${forbidden}`, true); 
+            return; 
+        }
+
         if (placeMode === "direct") {
-            const forbidden = checkRenjuForbidden(x, y, turn);
-            if (forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
             placeStone(x, y);
         } else {
             tempMove = { x, y };
@@ -224,7 +226,8 @@ function handleInput(e) {
 function finalConfirmPlace() {
     if (!tempMove || isGameOver) return;
     const forbidden = checkRenjuForbidden(tempMove.x, tempMove.y, turn);
-    if (forbidden) { updateStatus(`⚠️ ${forbidden} (흑 금수)`, true); return; }
+    if (forbidden) { updateStatus(`⚠️ ${forbidden}`, true); return; }
+    
     placeStone(tempMove.x, tempMove.y);
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
@@ -234,31 +237,47 @@ c.addEventListener('mousedown', handleInput);
 c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, { passive: false });
 
 function placeStone(x, y) {
-    board[y][x] = turn; lastMove = { x, y }; moveHistory.push({ x, y, p: turn }); draw();
-    if (checkWinStrict(x, y, turn)) { endGame(turn); return; }
+    board[y][x] = turn; 
+    lastMove = { x, y }; 
+    moveHistory.push({ x, y, p: turn }); 
+    draw();
+    
+    if (checkWinStrict(x, y, turn)) { 
+        endGame(turn); 
+        return; 
+    }
+    
     if (moveHistory.length === SIZE * SIZE) {
-        isGameOver = true; if (timerInterval) clearInterval(timerInterval);
+        isGameOver = true; 
+        if (timerInterval) clearInterval(timerInterval);
         document.getElementById("finishResultText").innerText = "무승부";
         document.getElementById("finishConfirmModal").style.display = "flex";
         return;
     }
-    turn = 3 - turn; startTurn();
+    
+    turn = 3 - turn; 
+    startTurn();
 }
 
-// --- 게임 종료 및 기타 기능 ---
+// --- 게임 종료 및 제어 ---
 function endGame(w) {
-    isGameOver = true; if (timerInterval) clearInterval(timerInterval); endReason = "정상종료";
+    isGameOver = true; 
+    if (timerInterval) clearInterval(timerInterval); 
+    endReason = "정상종료";
     saveHistory(w, "정상종료");
-    const isImp = (level === 'impossible' && mode === 'ai');
+    
     document.getElementById("finishResultText").innerText = (w === 1 ? '흑' : '백') + " 승리!";
     document.getElementById("finishConfirmModal").style.display = "flex";
+    
     if (typeof confetti === 'function' && (w === playerColor || mode !== 'ai')) {
-        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 }, colors: isImp ? ['#8e44ad', '#ffffff'] : undefined });
+        confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
     }
 }
 
 function endByTimeout() {
-    const winner = 3 - turn; isGameOver = true; endReason = "시간패";
+    const winner = 3 - turn; 
+    isGameOver = true; 
+    endReason = "시간패";
     document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 시간초과 패배!";
     document.getElementById("finishConfirmModal").style.display = "flex";
     saveHistory(winner, "시간패");
@@ -266,18 +285,24 @@ function endByTimeout() {
 
 function handleGiveUp() {
     if (isGameOver) return;
-    const winner = 3 - turn; isGameOver = true; endReason = "기권패";
+    const winner = 3 - turn; 
+    isGameOver = true; 
+    endReason = "기권패";
     document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 기권패!";
     document.getElementById("finishConfirmModal").style.display = "flex";
     saveHistory(winner, "기권패");
 }
 
+// --- 무르기 시스템 ---
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
     if (aiTimeout) { clearTimeout(aiTimeout); aiTimeout = null; }
 
-    undoCount++;
+    // 현재 요청한 플레이어의 카운트 증가
+    const undoPlayer = (mode === "ai") ? playerColor : turn;
+    undoCounts[undoPlayer]++;
+
     let stepsToRemove = (mode === "ai") ? 2 : 1;
     if (mode === "ai" && moveHistory.length < 2) stepsToRemove = 1;
 
@@ -289,12 +314,14 @@ function undo() {
     lastMove = moveHistory.length > 0 ? moveHistory[moveHistory.length - 1] : null;
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
+    
     if (mode === "ai") turn = playerColor;
     else turn = 3 - turn;
 
     draw();
     startTurn();
-    updateStatus(`무르기 완료 (${undoCount}/3)`, true);
+    const playerName = (undoPlayer === 1) ? "흑" : "백";
+    updateStatus(`${playerName} 무르기 완료 (${undoCounts[undoPlayer]}/3)`, true);
 }
 
 function setupConfirmBtn(callback) {
@@ -307,9 +334,16 @@ function setupConfirmBtn(callback) {
 function askUndo() {
     if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
     if (moveHistory.length === 0) return;
-    if (undoCount >= 3) { updateStatus("⚠️ 무르기 제한 초과 (3/3)", true); return; }
+
+    // 현재 턴 플레이어의 개별 횟수 확인
+    const undoPlayer = (mode === "ai") ? playerColor : turn;
+    const currentCount = undoCounts[undoPlayer];
+    const playerName = (undoPlayer === 1) ? "흑" : "백";
+
+    if (currentCount >= 3) { showToast(`⚠️ ${playerName} 무르기 제한 초과 (3/3)`); return; }
+
     document.getElementById("actionTitle").innerText = "무르기 확인";
-    document.getElementById("actionDesc").innerText = `무르기를 사용하시겠습니까?\n(현재 ${undoCount}/3회 사용됨)`;
+    document.getElementById("actionDesc").innerText = `${playerName}님, 무르기를 사용하시겠습니까?\n(현재 ${currentCount}/3회 사용됨)`;
     setupConfirmBtn(undo);
     document.getElementById("actionConfirmModal").style.display = "flex";
 }
@@ -324,22 +358,23 @@ function askGiveUp() {
 
 function closeActionConfirm() { document.getElementById("actionConfirmModal").style.display = "none"; }
 
-// --- 렌주룰 및 AI 알고리즘 ---
+// --- 렌주룰 및 승리 판정 ---
 function checkWinStrict(x, y, t) {
     const ds = [[1,0],[0,1],[1,1],[1,-1]];
     for(let [dx, dy] of ds) {
         let count = 1;
         for(let i=1; i<6; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
         for(let i=1; i<6; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
-        if (t === 1 && count === 5) return true;
-        if (t === 2 && count >= 5) return true;
+        if (t === 1 && count === 5) return true; 
+        if (t === 2 && count >= 5) return true;  
     }
     return false;
 }
 
 function checkRenjuForbidden(x, y, t) {
-    if (t !== 1) return false;
+    if (t !== 1) return false; 
     if (checkWinStrict(x, y, 1)) return false; 
+
     board[y][x] = 1;
     const ds = [[1,0],[0,1],[1,1],[1,-1]];
     for(let [dx, dy] of ds) {
@@ -360,39 +395,36 @@ function checkRenjuForbidden(x, y, t) {
 }
 
 function isRealFour(x, y, dx, dy, t) {
-    let positions = [];
+    let count = 0;
     for(let i=-4; i<=4; i++) {
         let nx = x+dx*i, ny = y+dy*i;
         if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && (board[ny][nx] === 0 || (nx===x && ny===y))) {
             let temp = board[ny][nx]; board[ny][nx] = t;
-            if (checkWinStrict(nx, ny, t)) positions.push({nx, ny});
+            if (checkWinStrict(nx, ny, t)) count++;
             board[ny][nx] = temp;
         }
     }
-    return positions.length > 0;
+    return count > 0;
 }
 
 function isRealOpenThree(x, y, dx, dy, t) {
     let foundOpenFour = false;
     for(let i=-4; i<=4; i++) {
         let nx = x+dx*i, ny = y+dy*i;
-        if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
-            if (nx === x && ny === y) continue;
-            if (board[ny][nx] === 0) {
-                board[ny][nx] = t;
-                if (isOpenFour(nx, ny, dx, dy, t)) foundOpenFour = true;
-                board[ny][nx] = 0;
-                if (foundOpenFour) break;
-            }
+        if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && board[ny][nx] === 0 && !(nx===x && ny===y)) {
+            board[ny][nx] = t;
+            if (isOpenFour(nx, ny, dx, dy, t)) foundOpenFour = true;
+            board[ny][nx] = 0;
+            if (foundOpenFour) break;
         }
     }
     return foundOpenFour;
 }
 
 function isOpenFour(x, y, dx, dy, t) {
-    let count = 1, leftIdx = 0, rightIdx = 0;
-    for(let i=1; i<5; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else { leftIdx = i; break; }
-    for(let i=1; i<5; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else { rightIdx = i; break; }
+    let count = 1, leftIdx = 1, rightIdx = 1;
+    while(board[y+dy*leftIdx]?.[x+dx*leftIdx]===t) { count++; leftIdx++; }
+    while(board[y-dy*rightIdx]?.[x-dx*rightIdx]===t) { count++; rightIdx++; }
     if (count === 4) {
         let p1 = board[y+dy*leftIdx]?.[x+dx*leftIdx];
         let p2 = board[y-dy*rightIdx]?.[x-dx*rightIdx];
@@ -401,19 +433,25 @@ function isOpenFour(x, y, dx, dy, t) {
     return false;
 }
 
+// --- AI 알고리즘 ---
 function triggerAi() {
     if (isGameOver) return;
-    const min = 500, max = 2000;
+    const min = 600, max = 1500;
     const delay = Math.random() * (max - min) + min;
     aiTimeout = setTimeout(() => {
         let best;
         switch(level) {
-            case 'easy': best = getBestMoveHeuristic(0.6, true); break;
-            case 'medium': best = getBestMoveHeuristic(1.0, false); break;
+            case 'easy': best = getBestMoveHeuristic(0.5, true); break;
+            case 'medium': best = getBestMoveHeuristic(0.9, false); break;
             case 'hard': best = getMinimaxMove(3); break;
-            case 'impossible': best = getMinimaxMove(5); break; 
+            case 'impossible': best = getMinimaxMove(4); break; 
         }
-        if (best && best.x !== -1) placeStone(best.x, best.y);
+        if (best && best.x !== -1) {
+            if (turn === 1 && checkRenjuForbidden(best.x, best.y, 1)) {
+                best = getBestMoveHeuristic(0.5, true);
+            }
+            placeStone(best.x, best.y);
+        }
         aiTimeout = null;
     }, delay);
 }
@@ -424,7 +462,7 @@ function getBestMoveHeuristic(dW, isRandom) {
         if (board[y][x] === 0) {
             if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
             let s = getPointBetter(x, y, turn) + (getPointBetter(x, y, 3-turn) * dW);
-            if (isRandom) s *= (0.7 + Math.random() * 0.6);
+            if (isRandom) s *= (0.8 + Math.random() * 0.4);
             if (s > mS) { mS = s; bX = x; bY = y; }
         }
     }
@@ -445,13 +483,13 @@ function getMinimaxMove(depth) {
                 if(hasNeighbor) break;
             }
             if (!hasNeighbor && moveHistory.length > 0) continue;
-            let centerBonus = (7-Math.abs(7-x) + 7-Math.abs(7-y)) * 10;
-            let s = getPointBetter(x, y, turn) * 1.5 + getPointBetter(x, y, 3-turn) + centerBonus;
+            let centerBonus = (7-Math.abs(7-x) + 7-Math.abs(7-y)) * 5;
+            let s = getPointBetter(x, y, turn) * 1.2 + getPointBetter(x, y, 3-turn) + centerBonus;
             candidates.push({x, y, s});
         }
     }
     candidates.sort((a,b) => b.s - a.s);
-    let searchRange = candidates.slice(0, 15);
+    let searchRange = candidates.slice(0, 12);
     for (let m of searchRange) {
         board[m.y][m.x] = turn;
         let score = minimax(depth - 1, -Infinity, Infinity, false);
@@ -476,19 +514,15 @@ function minimax(depth, alpha, beta, isMax) {
     let currTurn = isMax ? turn : 3 - turn;
     let candidates = [];
     for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x] === 0) {
-            if (currTurn === 1 && checkRenjuForbidden(x, y, 1)) continue;
-            candidates.push({x, y, s: getPointBetter(x, y, currTurn)});
-        }
+        if(board[y][x] === 0) candidates.push({x, y, s: getPointBetter(x, y, currTurn)});
     }
     candidates.sort((a,b) => b.s - a.s);
     let searchRange = candidates.slice(0, 5);
-
     if (isMax) {
         let maxE = -Infinity;
         for (let m of searchRange) {
             board[m.y][m.x] = turn;
-            if (checkWinStrict(m.x, m.y, turn)) { board[m.y][m.x]=0; return 2000000 + depth; }
+            if (checkWinStrict(m.x, m.y, turn)) { board[m.y][m.x]=0; return 1000000 + depth; }
             let ev = minimax(depth-1, alpha, beta, false);
             board[m.y][m.x] = 0; maxE = Math.max(maxE, ev); alpha = Math.max(alpha, ev);
             if (beta <= alpha) break;
@@ -498,7 +532,7 @@ function minimax(depth, alpha, beta, isMax) {
         let minE = Infinity;
         for (let m of searchRange) {
             board[m.y][m.x] = 3 - turn;
-            if (checkWinStrict(m.x, m.y, 3-turn)) { board[m.y][m.x]=0; return -2000000 - depth; }
+            if (checkWinStrict(m.x, m.y, 3-turn)) { board[m.y][m.x]=0; return -1000000 - depth; }
             let ev = minimax(depth-1, alpha, beta, true);
             board[m.y][m.x] = 0; minE = Math.min(minE, ev); beta = Math.min(beta, ev);
             if (beta <= alpha) break;
@@ -511,7 +545,7 @@ function evaluateBetter() {
     let score = 0;
     for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
         if(board[y][x] === turn) score += getPointBetter(x, y, turn);
-        else if(board[y][x] === 3-turn) score -= getPointBetter(x, y, 3-turn) * 1.4;
+        else if(board[y][x] === 3-turn) score -= getPointBetter(x, y, 3-turn) * 1.1;
     }
     return score;
 }
@@ -523,28 +557,24 @@ function getPointBetter(x, y, t) {
         for (let i = 1; i < 5; i++) {
             let nx = x+dx*i, ny = y+dy*i;
             if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
-                if (board[ny][nx] === t) count++;
-                else if (board[ny][nx] === 0) { openEnds++; break; }
-                else break;
+                if (board[ny][nx] === t) count++; else if (board[ny][nx] === 0) { openEnds++; break; } else break;
             } else break;
         }
         for (let i = 1; i < 5; i++) {
             let nx = x-dx*i, ny = y-dy*i;
             if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
-                if (board[ny][nx] === t) count++;
-                else if (board[ny][nx] === 0) { openEnds++; break; }
-                else break;
+                if (board[ny][nx] === t) count++; else if (board[ny][nx] === 0) { openEnds++; break; } else break;
             } else break;
         }
-        if (count >= 5) total += 1000000;
-        else if (count === 4) { total += (openEnds === 2) ? 200000 : (openEnds === 1 ? 50000 : 0); }
-        else if (count === 3) { total += (openEnds === 2) ? 10000 : (openEnds === 1 ? 1000 : 0); }
-        else if (count === 2) { total += (openEnds === 2) ? 500 : 0; }
+        if (count >= 5) total += 500000;
+        else if (count === 4) total += (openEnds === 2) ? 50000 : (openEnds === 1 ? 5000 : 0);
+        else if (count === 3) total += (openEnds === 2) ? 5000 : (openEnds === 1 ? 500 : 0);
+        else if (count === 2) total += (openEnds === 2) ? 500 : 0;
     }
     return total;
 }
 
-// --- [통합] 이력 저장 및 기보 관리 복기 기능 ---
+// --- 기보 관리 ---
 function saveHistory(w, reason){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
     h.unshift({ date:new Date().toLocaleString(), winner:w===1?'흑':'백', moves:moveHistory.length, data:[...moveHistory], isImp: (level==='impossible' && mode === 'ai'), reason: reason });
@@ -553,116 +583,58 @@ function saveHistory(w, reason){
 
 function showHistory(){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-    let list=document.getElementById("historyList");
-    if(!list) return;
+    let list=document.getElementById("historyList"); if(!list) return;
     list.innerHTML=h.length?"":"<p style='color:#999;text-align:center;'>기록 없음</p>";
     h.forEach((item, idx)=>{
-        if(!item || !item.winner || !item.date) return;
         let d = item.date.includes(',') ? item.date.split(',')[1] : item.date;
-        let reasonTag = (item.reason && item.reason !== "정상종료") ? `<span style="color:var(--danger); font-size:10px; margin-left:4px;">(${item.reason})</span>` : "";
-        list.innerHTML+=`
-            <div class="history-item" onclick="replay(${idx})">
-                <div>
-                    <strong style="color:${item.isImp?'var(--impossible)':'inherit'}">${item.winner} 승</strong>${reasonTag} (${item.moves}수)<br>
-                    <small>${d}</small>
-                </div>
-                <button class="del-btn" onclick="deleteHistory(event, ${idx})">삭제</button>
-            </div>`;
+        let reasonTag = (item.reason && item.reason !== "정상종료") ? `<span style="color:#ff4d4d; font-size:10px; margin-left:4px;">(${item.reason})</span>` : "";
+        list.innerHTML+=`<div class="history-item" onclick="replay(${idx})"><div><strong style="color:${item.isImp?'#8e44ad':'inherit'}">${item.winner} 승</strong>${reasonTag} (${item.moves}수)<br><small>${d}</small></div><button class="btn" style="padding:4px 8px; font-size:12px; background:#eee;" onclick="deleteHistory(event, ${idx})">삭제</button></div>`;
     });
     document.getElementById("historyModal").style.display="flex";
 }
 
-// 개별 삭제 로직 수정 (버블링 방지)
-function deleteHistory(e, idx){ 
-    e.stopPropagation(); 
-    let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); 
-    h.splice(idx, 1); 
-    localStorage.setItem("omok_final_history", JSON.stringify(h)); 
-    showHistory(); 
-}
+function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); showHistory(); }
 
-// 전체 삭제 확인 모달 열기
-function openDeleteConfirm() {
-    document.getElementById('deleteConfirmModal').style.display = 'flex';
-}
+function openDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'flex'; }
 
-// 전체 삭제 실행
-function clearAllHistory(){ 
-    localStorage.removeItem("omok_final_history"); 
-    document.getElementById('deleteConfirmModal').style.display='none'; 
-    showHistory(); 
-    showToast("모든 기보가 삭제되었습니다.");
-}
+function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'none'; }
+
+function clearAllHistory(){ localStorage.removeItem("omok_final_history"); closeDeleteConfirm(); showHistory(); showToast("모든 기보가 삭제되었습니다."); }
 
 function replay(idx){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
     let g = h[idx]; if(!g) return;
     board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
     moveHistory = g.data; isGameOver = true; if(timerInterval) clearInterval(timerInterval);
-    endReason = g.reason || ""; 
-    moveHistory.forEach(m => board[m.y][m.x] = m.p);
-    document.getElementById("historyModal").style.display = "none";
-    document.getElementById("startModal").style.display = "none";
+    endReason = g.reason || ""; moveHistory.forEach(m => board[m.y][m.x] = m.p);
+    document.getElementById("historyModal").style.display = "none"; document.getElementById("startModal").style.display = "none";
     viewFinalRecord();
 }
 
 function viewFinalRecord(){
-    document.getElementById("finishConfirmModal").style.display="none";
-    document.getElementById("undoBtn").style.display="none";
-    document.getElementById("giveUpBtn").style.display="none";
-    document.getElementById("mainGoBtn").style.display="block";
+    document.getElementById("finishConfirmModal").style.display="none"; document.getElementById("undoBtn").style.display="none";
+    document.getElementById("giveUpBtn").style.display="none"; document.getElementById("mainGoBtn").style.display="block";
     document.getElementById("confirmPlaceBtn").style.display="none";
-    let statusText = "복기 중: " + moveHistory.length + "수";
-    if(endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
+    let statusText = "복기 중: " + moveHistory.length + "수"; if(endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
     updateStatus(statusText); draw();
 }
 
-// --- PWA 및 기타 유틸리티 ---
-window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    deferredPrompt = e;
-    const hideUntil = localStorage.getItem('install_banner_hide_until');
-    const now = Date.now();
-    if (!hideUntil || now > parseInt(hideUntil)) {
-        const banner = document.getElementById('install-banner');
-        if(banner) banner.style.display = 'flex';
-    }
-});
-
-document.getElementById('install-confirm-btn')?.addEventListener('click', async () => {
-    if (deferredPrompt) {
-        deferredPrompt.prompt();
-        const { outcome } = await deferredPrompt.userChoice;
-        if (outcome === 'accepted') document.getElementById('install-banner').style.display = 'none';
-        deferredPrompt = null;
-    }
-});
-
-document.getElementById('install-close-btn')?.addEventListener('click', () => {
-    document.getElementById('install-banner').style.display = 'none';
-    const hideUntil = Date.now() + (7 * 24 * 60 * 60 * 1000);
-    localStorage.setItem('install_banner_hide_until', hideUntil.toString());
-});
-
+// --- 유틸리티 및 PWA ---
 function showToast(message) {
-    const toast = document.getElementById("toast");
-    if(!toast) return;
-    toast.innerText = message;
-    toast.classList.add("show");
+    const toast = document.getElementById("toast"); if(!toast) return;
+    toast.innerText = message; toast.classList.add("show");
     setTimeout(() => { toast.classList.remove("show"); }, 2500);
 }
 
 function handleEmailContact(email) {
-    const start = Date.now();
-    window.location.href = `mailto:${email}`;
-    setTimeout(() => {
-        if (Date.now() - start < 1000) {
-            navigator.clipboard.writeText(email).then(() => {
-                showToast("📧 이메일 주소가 복사되었습니다!");
-            });
-        }
-    }, 500);
+    const start = Date.now(); window.location.href = `mailto:${email}`;
+    setTimeout(() => { if (Date.now() - start < 1000) { navigator.clipboard.writeText(email).then(() => { showToast("📧 이메일 주소가 복사되었습니다!"); }); } }, 500);
 }
 
-// --- 초기 실행 ---
+window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; const banner = document.getElementById('install-banner'); if(banner) banner.style.display = 'flex'; });
+
+document.getElementById('install-confirm-btn')?.addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; document.getElementById('install-banner').style.display = 'none'; } });
+
+document.getElementById('install-close-btn')?.addEventListener('click', () => { document.getElementById('install-banner').style.display = 'none'; });
+
 updateUI();
