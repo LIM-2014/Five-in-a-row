@@ -223,7 +223,7 @@ canvas {
 
 /* --- 최종 푸터 디자인 --- */
 footer {
-    position: fixed;
+    position: static;
     bottom: 0;
     left: 0;
     width: 100%;
