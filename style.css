@@ -22,8 +22,8 @@ body {
     align-items: center; 
     justify-content: center;
     min-height: 100dvh;
-    overflow: hidden; 
-    touch-action: none;
+    /* overflow: hidden 제거 → 스크롤 허용 */
+    /* touch-action: none 제거 → 스크롤 허용 */
 }
 
 /* --- 레이아웃 --- */
@@ -75,14 +75,11 @@ body {
     z-index: 11000;
     display: none; 
     align-items: center;
-    
-    /* 핵심 수정 부분 */
-    width: auto;           /* 콘텐츠 크기에 딱 맞게 조절 */
-    min-width: fit-content; /* 내용물만큼 너비 확보 */
-    max-width: 90%;        /* 화면폭 보다는 작게 */
-    justify-content: center; /* 중앙 정렬 (또는 flex-start) */
-    gap: 12px;             /* 문구와 버튼 사이의 간격을 직접 조절 (원하는 만큼 수정 가능) */
-    
+    width: auto;
+    min-width: fit-content;
+    max-width: 90%;
+    justify-content: center;
+    gap: 12px;
     border: 1px solid rgba(0,0,0,0.05);
     animation: floatingPop 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
@@ -91,28 +88,20 @@ body {
     font-size: 13px;
     font-weight: 600;
     color: #444;
-    white-space: nowrap; /* 줄바꿈 방지 */
-    flex: 0 1 auto;      /* 불필요하게 늘어나지 않도록 설정 */
+    white-space: nowrap;
+    flex: 0 1 auto;
 }
 
-/* 닫기 버튼(&times;)이 너무 멀어지는 걸 방지하기 위해 
-   버튼들을 묶는 그룹의 여백도 조정합니다. */
 #install-banner > div:last-child {
     display: flex;
     align-items: center;
-    gap: 8px; /* 설치 버튼과 X 버튼 사이 간격 */
+    gap: 8px;
     flex-shrink: 0;
 }
 
 @keyframes floatingPop {
     from { transform: translateX(-50%) translateY(50px); opacity: 0; }
     to { transform: translateX(-50%) translateY(0); opacity: 1; }
-}
-
-.install-text {
-    font-size: 14px;
-    font-weight: 600;
-    color: #444;
 }
 
 #install-confirm-btn {
@@ -197,7 +186,9 @@ body {
 canvas {
     background: linear-gradient(135deg,#d8a45d,#c8924a); 
     border: 4px solid #4a3419; border-radius: 12px; 
-    width: 100%; aspect-ratio: 1/1; touch-action: none;
+    width: 100%; aspect-ratio: 1/1;
+    /* touch-action은 canvas에만 none 적용 → 캔버스 위에서만 기본 터치 막기 */
+    touch-action: none;
 }
 
 .info-bar { display: flex; gap: 10px; margin-bottom: 15px; width: 100%; justify-content: space-between; align-items: center; }
@@ -223,15 +214,14 @@ canvas {
 
 /* --- 최종 푸터 디자인 --- */
 footer {
-    position: static;
+    position: fixed;
     bottom: 0;
     left: 0;
     width: 100%;
-    /* 배경색과 일체감을 주면서도 블러 효과로 구분감 부여 */
     background: rgba(233, 214, 167, 0.8); 
     backdrop-filter: blur(10px);
     -webkit-backdrop-filter: blur(10px);
-    border-top: 1px solid rgba(74, 52, 25, 0.1); /* 바둑판 선 색상 계열 사용 */
+    border-top: 1px solid rgba(74, 52, 25, 0.1);
     padding: 12px 20px calc(12px + env(safe-area-inset-bottom, 0px));
     z-index: 9000;
     text-align: center;
@@ -245,7 +235,6 @@ footer {
     gap: 6px;
 }
 
-/* 링크 스타일 */
 .footer-nav {
     display: flex;
     justify-content: center;
@@ -256,7 +245,7 @@ footer {
 .footer-link {
     font-size: 12px;
     font-weight: 600;
-    color: var(--primary); /* 기존 블루 포인트 컬러 활용 */
+    color: var(--primary);
     text-decoration: none;
     transition: opacity 0.2s;
 }
@@ -266,7 +255,6 @@ footer {
     text-decoration: underline;
 }
 
-/* 구분선 점(Dot) 스타일 */
 .footer-sep::before {
     content: "•";
     color: #4a3419;
@@ -274,13 +262,12 @@ footer {
     font-size: 10px;
 }
 
-/* 하단 세부 정보 */
 .footer-info {
     display: flex;
     flex-direction: column;
     gap: 2px;
     font-size: 10px;
-    color: #8a7a60; /* 배경보다 살짝 어두운 톤 */
+    color: #8a7a60;
     opacity: 0.8;
 }
 
@@ -293,7 +280,6 @@ footer {
     letter-spacing: -0.5px;
 }
 
-/* 가로 모드 및 작은 화면 대응 */
 @media (max-height: 700px) {
     footer {
         padding: 8px 20px calc(8px + env(safe-area-inset-bottom, 0px));
@@ -303,23 +289,32 @@ footer {
 
 /* AI 생각 중일 때 상태 바 스타일 */
 .status.thinking {
-    border: 2px solid #007bff; /* 파란색 테두리 */
+    border: 2px solid #007bff;
     border-radius: 8px;
     animation: pulse-blue 1.5s infinite ease-in-out;
 }
 
-/* 부드럽게 페이드 인 아웃 되는 효과 */
 @keyframes pulse-blue {
     0% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0.7); opacity: 1; }
     50% { box-shadow: 0 0 10px 5px rgba(0, 123, 255, 0.3); opacity: 0.8; }
     100% { box-shadow: 0 0 0 0 rgba(0, 123, 255, 0); opacity: 1; }
 }
 
+/* --- 광고 영역: 크기 제한 추가 --- */
 .advertisement {
-    max-width: 600px;
-    min-width: none;
     width: 75%;
-    height: auto;
-    margin-bottom: auto;
+    max-width: 400px;       /* 최대 너비 제한 */
+    max-height: 120px;      /* 최대 높이 제한 */
+    margin-bottom: 12px;
     overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.advertisement img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;    /* 비율 유지하며 영역에 맞게 축소 */
+    display: block;
 }

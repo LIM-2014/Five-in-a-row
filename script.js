@@ -238,7 +238,11 @@ function finalConfirmPlace() {
 }
 
 c.addEventListener('mousedown', handleInput);
-c.addEventListener('touchstart', (e) => { e.preventDefault(); handleInput(e); }, { passive: false });
+c.addEventListener('touchstart', (e) => {
+    // 캔버스 위의 터치만 기본동작 막기 (body 스크롤은 유지)
+    e.preventDefault();
+    handleInput(e);
+}, { passive: false });
 
 function placeStone(x, y) {
     board[y][x] = turn; 
