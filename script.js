@@ -34,14 +34,14 @@ function startGame() {
     
     const isImp = (level === 'impossible' && mode === 'ai');
     const ub = document.getElementById("undoBtn");
-    if(ub) {
+    if (ub) {
         ub.style.display = "block";
         ub.disabled = isImp;
         ub.innerText = isImp ? "무르기 불가" : "무르기";
     }
     
     const gb = document.getElementById("giveUpBtn");
-    if(gb) gb.style.display = "block";
+    if (gb) gb.style.display = "block";
     
     draw();
     startTurn(); 
@@ -153,7 +153,6 @@ function updateStatus(msg, isPriority = false) {
     if (!s) return;
     if (isGameOver && !msg) return;
     
-    // 기본적으로 클래스 제거
     s.classList.remove("thinking");
 
     if (msg) {
@@ -164,7 +163,7 @@ function updateStatus(msg, isPriority = false) {
 
     if (mode === "ai" && turn !== playerColor) {
         s.innerText = "AI 생각 중..."; 
-        s.classList.add("thinking"); // CSS 애니메이션 작동
+        s.classList.add("thinking");
     } else {
         s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
     }
@@ -239,7 +238,6 @@ function finalConfirmPlace() {
 
 c.addEventListener('mousedown', handleInput);
 c.addEventListener('touchstart', (e) => {
-    // 캔버스 위의 터치만 기본동작 막기 (body 스크롤은 유지)
     e.preventDefault();
     handleInput(e);
 }, { passive: false });
@@ -247,7 +245,8 @@ c.addEventListener('touchstart', (e) => {
 function placeStone(x, y) {
     board[y][x] = turn; 
     lastMove = { x, y }; 
-    moveHistory.push({ x, y, p: turn }); 
+    moveHistory.push({ x, y, p: turn });
+    saveGameSession(); // 매 수마다 상태 저장
     draw();
     
     if (checkWinStrict(x, y, turn)) { 
@@ -258,6 +257,7 @@ function placeStone(x, y) {
     if (moveHistory.length === SIZE * SIZE) {
         isGameOver = true; 
         if (timerInterval) clearInterval(timerInterval);
+        clearGameSession();
         document.getElementById("finishResultText").innerText = "무승부";
         document.getElementById("finishConfirmModal").style.display = "flex";
         return;
@@ -269,6 +269,7 @@ function placeStone(x, y) {
 
 // --- 게임 종료 및 제어 ---
 function endGame(w) {
+    clearGameSession();
     isGameOver = true; 
     if (timerInterval) clearInterval(timerInterval); 
     endReason = "정상종료";
@@ -284,6 +285,7 @@ function endGame(w) {
 }
 
 function endByTimeout() {
+    clearGameSession();
     const winner = 3 - turn; 
     isGameOver = true; 
     endReason = "시간패";
@@ -294,12 +296,11 @@ function endByTimeout() {
 }
 
 function handleGiveUp() {
+    clearGameSession();
     if (isGameOver) return;
     isGameOver = true;
     endReason = "기권패";
 
-    // AI 대전: 기권은 항상 플레이어 패 (turn이 AI로 넘어간 상태여도 플레이어가 기권한 것)
-    // 친구 대전: 기권 버튼을 누른 시점의 turn이 기권하는 플레이어
     const loser  = (mode === 'ai') ? playerColor : turn;
     const winner = 3 - loser;
 
@@ -309,13 +310,7 @@ function handleGiveUp() {
     renderWinRate();
 }
 
-// ─── 무르기 (버그 수정) ───────────────────────────────────────────────────────
-// 수정 전 문제:
-//   lastPlayer = moveHistory 마지막 항목의 플레이어(=AI 백)로 구한 뒤
-//   turn = lastPlayer 로 설정해버려서 AI 차례가 되고 undoCounts도 AI 기준으로 차감됨.
-// 수정 후:
-//   AI 대전 → 무르기 후 항상 playerColor 차례로 복귀, 카운트도 playerColor 기준
-//   친구 대전 → 제거된 돌의 플레이어 차례로 복귀 (기존 동작 유지)
+// ─── 무르기 ───────────────────────────────────────────────────────
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
@@ -334,17 +329,15 @@ function undo() {
     document.getElementById("confirmPlaceBtn").style.display = "none";
 
     if (mode === "ai") {
-        // AI 대전: 무르기는 항상 플레이어 차례로 돌아옴
         turn = playerColor;
         undoCounts[playerColor]++;
     } else {
-        // 친구 대전: 마지막으로 제거된 돌의 플레이어 차례로 돌아옴
-        // moveHistory에서 마지막으로 남은 수의 다음 플레이어가 두어야 함
         const nextTurn = moveHistory.length > 0 ? 3 - moveHistory[moveHistory.length - 1].p : 1;
         undoCounts[nextTurn]++;
         turn = nextTurn;
     }
 
+    saveGameSession();
     draw();
     startTurn();
     const playerName = (turn === 1) ? "흑" : "백";
@@ -362,7 +355,6 @@ function askUndo() {
     if (isGameOver || (level === 'impossible' && mode === 'ai')) return;
     if (moveHistory.length === 0) return;
 
-    // AI 대전은 항상 플레이어 기준, 친구 대전은 마지막으로 돌을 놓은 플레이어 기준
     const actingPlayer = (mode === "ai") ? playerColor : moveHistory[moveHistory.length - 1].p;
     const currentCount = undoCounts[actingPlayer];
     const playerName = (actingPlayer === 1) ? "흑" : "백";
@@ -610,9 +602,9 @@ function saveHistory(w, reason){
         data: [...moveHistory],
         isImp: (level === 'impossible' && mode === 'ai'),
         reason: reason,
-        mode: mode,                          // 'ai' | 'friend'
-        playerColor: playerColor,            // 1=흑, 2=백
-        playerWon: (mode === 'ai') ? (w === playerColor) : null  // AI 대전만 의미 있음
+        mode: mode,
+        playerColor: playerColor,
+        playerWon: (mode === 'ai') ? (w === playerColor) : null
     });
     localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0,5)));
 }
@@ -673,7 +665,7 @@ document.getElementById('install-confirm-btn')?.addEventListener('click', async 
 
 document.getElementById('install-close-btn')?.addEventListener('click', () => { document.getElementById('install-banner').style.display = 'none'; });
 
-// --- 최근 5게임 승률 렌더링 (AI 대전만, 플레이어 기준) ---
+// --- 최근 5게임 승률 렌더링 ---
 function renderWinRate() {
     const all = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
 
@@ -687,7 +679,6 @@ function renderWinRate() {
 
     if (!emptyEl) return;
 
-    // AI 대전 기록만 필터 (mode 필드 없는 구버전 기록은 제외)
     const aiGames = all.filter(item => item.mode === 'ai').slice(0, 5);
 
     if (aiGames.length === 0) {
@@ -702,10 +693,8 @@ function renderWinRate() {
     let wins = 0, losses = 0, draws = 0;
     iconsEl.innerHTML = "";
 
-    // 오래된 순(왼쪽) → 최신(오른쪽)
     const ordered = [...aiGames].reverse();
 
-    // 바 높이: 승=44px(높), 패=14px(낮), 무=28px(중간)
     const barConfig = {
         win:  { height: 44, color: '#2f6fed', label: 'W' },
         lose: { height: 14, color: '#e74c3c', label: 'L' },
@@ -769,5 +758,165 @@ function renderWinRate() {
     pctEl.textContent = `승률 ${pct}%`;
 }
 
+// ─── 게임 세션 저장/복원 (localStorage) ──────────────────────────
+
+function saveGameSession() {
+    if (isGameOver || moveHistory.length === 0) {
+        localStorage.removeItem("omok_live_session");
+        return;
+    }
+    localStorage.setItem("omok_live_session", JSON.stringify({
+        board, turn, moveHistory, lastMove,
+        playerColor, level, mode, undoCounts, placeMode
+    }));
+}
+
+function clearGameSession() {
+    localStorage.removeItem("omok_live_session");
+}
+
+function resumeGame(saved) {
+    board       = saved.board;
+    turn        = saved.turn;
+    moveHistory = saved.moveHistory;
+    lastMove    = saved.lastMove;
+    playerColor = saved.playerColor;
+    level       = saved.level;
+    mode        = saved.mode;
+    undoCounts  = saved.undoCounts ?? { 1: 0, 2: 0 };
+    placeMode   = saved.placeMode ?? "direct";
+    isGameOver  = false;
+    tempMove    = null;
+
+    document.getElementById("startModal").style.display = "none";
+    document.getElementById("mainGoBtn").style.display = "none";
+    document.getElementById("confirmPlaceBtn").style.display = "none";
+    document.getElementById("finishConfirmModal").style.display = "none";
+
+    const isImp = (level === 'impossible' && mode === 'ai');
+    const ub = document.getElementById("undoBtn");
+    if (ub) {
+        ub.style.display = "block";
+        ub.disabled = isImp;
+        ub.innerText = isImp ? "무르기 불가" : "무르기";
+    }
+    const gb = document.getElementById("giveUpBtn");
+    if (gb) gb.style.display = "block";
+
+    draw();
+    startTurn();
+    showToast("이전 게임을 이어합니다!");
+}
+
+function giveUpOrphanGame(saved) {
+    moveHistory = saved.moveHistory;
+    mode        = saved.mode;
+    playerColor = saved.playerColor;
+    level       = saved.level;
+
+    const loser  = saved.playerColor;
+    const winner = 3 - loser;
+    saveHistory(winner, "기권패(새로고침)");
+    clearGameSession();
+    renderWinRate();
+    showToast("기권패로 처리되었습니다.");
+}
+
+function checkOrphanSession() {
+    const raw = localStorage.getItem("omok_live_session");
+    if (!raw) return;
+
+    let saved;
+    try { saved = JSON.parse(raw); } catch { clearGameSession(); return; }
+    if (!saved || !saved.moveHistory || saved.moveHistory.length === 0) {
+        clearGameSession(); return;
+    }
+
+    const modeLabel  = saved.mode === 'ai' ? 'AI 대전' : '친구 대전';
+    const levelLabel = { easy:'초보', medium:'중수', hard:'고수', impossible:'불가능' }[saved.level] ?? '';
+    const infoLine   = saved.mode === 'ai'
+        ? `${modeLabel} · ${levelLabel} · ${saved.moveHistory.length}수 진행`
+        : `${modeLabel} · ${saved.moveHistory.length}수 진행`;
+
+    // ── 공통 오버레이 ──
+    const overlay = document.createElement("div");
+    overlay.id = "orphanOverlay";
+    overlay.style.cssText = `
+        position:fixed; inset:0; background:rgba(0,0,0,0.75);
+        display:flex; align-items:center; justify-content:center;
+        z-index:20000; padding:20px;
+    `;
+
+    function renderMain() {
+        overlay.innerHTML = `
+            <div style="background:#fff; border-radius:24px; padding:28px;
+                        max-width:320px; width:100%; text-align:center;
+                        box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+                <div style="font-size:2rem; margin-bottom:8px;">♟️</div>
+                <div style="font-weight:800; font-size:1.2rem; margin-bottom:8px; color:#333;">
+                    이전 게임이 있어요
+                </div>
+                <div style="font-size:13px; color:#888; margin-bottom:22px; line-height:1.7;
+                            background:#f7f3ec; border-radius:10px; padding:10px 14px;">
+                    ${infoLine}
+                </div>
+                <button id="orphanResume" style="width:100%; padding:14px; border-radius:12px;
+                    border:none; background:#2f6fed; color:#fff; font-weight:800;
+                    font-size:15px; cursor:pointer; margin-bottom:8px;">
+                    이어하기
+                </button>
+                <button id="orphanGiveup" style="width:100%; padding:14px; border-radius:12px;
+                    border:none; background:#f0f0f0; color:#777; font-weight:700;
+                    font-size:14px; cursor:pointer;">
+                    기권하기
+                </button>
+            </div>
+        `;
+
+        document.getElementById("orphanResume").onclick = () => {
+            overlay.remove();
+            resumeGame(saved);
+        };
+
+        document.getElementById("orphanGiveup").onclick = renderConfirm;
+    }
+
+    function renderConfirm() {
+        overlay.innerHTML = `
+            <div style="background:#fff; border-radius:24px; padding:28px;
+                        max-width:320px; width:100%; text-align:center;
+                        box-shadow:0 20px 50px rgba(0,0,0,0.3);">
+                <div style="font-size:2rem; margin-bottom:8px;">⚠️</div>
+                <div style="font-weight:800; font-size:1.1rem; margin-bottom:10px; color:#333;">
+                    정말 기권하시겠어요?
+                </div>
+                <div style="font-size:13px; color:#999; margin-bottom:22px; line-height:1.6;">
+                    기권패로 기록되며<br>이 게임은 복구할 수 없어요.
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button id="orphanGiveupConfirm" style="flex:1; padding:13px; border-radius:12px;
+                        border:none; background:#e74c3c; color:#fff; font-weight:800;
+                        font-size:14px; cursor:pointer;">기권</button>
+                    <button id="orphanGiveupCancel" style="flex:1; padding:13px; border-radius:12px;
+                        border:none; background:#f0f0f0; color:#333; font-weight:700;
+                        font-size:14px; cursor:pointer;">돌아가기</button>
+                </div>
+            </div>
+        `;
+
+        document.getElementById("orphanGiveupConfirm").onclick = () => {
+            overlay.remove();
+            giveUpOrphanGame(saved);
+        };
+
+        document.getElementById("orphanGiveupCancel").onclick = renderMain;
+    }
+
+    renderMain();
+    document.body.appendChild(overlay);
+}
+
+// ── 초기화 ──
 renderWinRate();
 updateUI();
+checkOrphanSession();
