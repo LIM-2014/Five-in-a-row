@@ -838,7 +838,6 @@ function checkOrphanSession() {
         ? `${modeLabel} · ${levelLabel} · ${saved.moveHistory.length}수 진행`
         : `${modeLabel} · ${saved.moveHistory.length}수 진행`;
 
-    // ── 공통 오버레이 ──
     const overlay = document.createElement("div");
     overlay.id = "orphanOverlay";
     overlay.style.cssText = `
@@ -846,6 +845,10 @@ function checkOrphanSession() {
         display:flex; align-items:center; justify-content:center;
         z-index:20000; padding:20px;
     `;
+
+    // DOM에 먼저 추가한 뒤 내용 렌더링
+    document.body.appendChild(overlay);
+    renderMain();
 
     function renderMain() {
         overlay.innerHTML = `
@@ -911,9 +914,6 @@ function checkOrphanSession() {
 
         document.getElementById("orphanGiveupCancel").onclick = renderMain;
     }
-
-    renderMain();
-    document.body.appendChild(overlay);
 }
 
 // ── 초기화 ──
