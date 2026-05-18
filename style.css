@@ -303,8 +303,8 @@ footer {
 /* --- 광고 영역: 크기 제한 추가 --- */
 .advertisement {
     width: 75%;
-    max-width: 800px;       /* 최대 너비 제한 */
-    max-height: 144px;      /* 최대 높이 제한 */
+    max-width: 700px;       /* 최대 너비 제한 */
+    max-height: 126px;      /* 최대 높이 제한 */
     margin-bottom: 12px;
     overflow: hidden;
     display: flex;
