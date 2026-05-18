@@ -246,7 +246,7 @@ function placeStone(x, y) {
     board[y][x] = turn; 
     lastMove = { x, y }; 
     moveHistory.push({ x, y, p: turn });
-    saveGameSession(); // 매 수마다 상태 저장
+    saveGameSession();
     draw();
     
     if (checkWinStrict(x, y, turn)) { 
@@ -452,7 +452,10 @@ function isOpenFour(x, y, dx, dy, t) {
     return false;
 }
 
+// ============================================================
 // --- AI 알고리즘 ---
+// ============================================================
+
 function triggerAi() {
     if (isGameOver) return;
     const min = 600, max = 1500;
@@ -460,10 +463,10 @@ function triggerAi() {
     aiTimeout = setTimeout(() => {
         let best;
         switch(level) {
-            case 'easy': best = getBestMoveHeuristic(0.5, true); break;
-            case 'medium': best = getBestMoveHeuristic(0.9, false); break;
-            case 'hard': best = getMinimaxMove(3); break;
-            case 'impossible': best = getMinimaxMove(4); break; 
+            case 'easy':       best = getBestMoveHeuristic(0.5, true);  break;
+            case 'medium':     best = getBestMoveHeuristic(0.9, false); break;
+            case 'hard':       best = getMinimaxMove(7);                break;  // ★ depth 7
+            case 'impossible': best = getMCTSMove(1200);                break;  // ★ MCTS 1.2초
         }
         if (best && best.x !== -1) {
             if (turn === 1 && checkRenjuForbidden(best.x, best.y, 1)) {
@@ -475,6 +478,7 @@ function triggerAi() {
     }, delay);
 }
 
+// ─── 휴리스틱 (초보/중수) ─────────────────────────────────────────
 function getBestMoveHeuristic(dW, isRandom) {
     let bX = -1, bY = -1, mS = -1;
     for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
@@ -488,111 +492,351 @@ function getBestMoveHeuristic(dW, isRandom) {
     return {x: bX, y: bY};
 }
 
-function getMinimaxMove(depth) {
-    let bestScore = -Infinity; let move = {x: -1, y: -1}; let candidates = [];
-    let winMove = findImmediateWin(turn); if(winMove) return winMove;
-    let threatMove = findImmediateWin(3-turn); if(threatMove) return threatMove;
-    for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x] === 0) {
-            if (turn === 1 && checkRenjuForbidden(x, y, 1)) continue;
-            let hasNeighbor = false;
-            for(let dy=-2; dy<=2; dy++) {
-                for(let dx=-2; dx<=2; dx++) { if(board[y+dy]?.[x+dx]) { hasNeighbor = true; break; } }
-                if(hasNeighbor) break;
+// ─── 후보 수 생성 (공통) ──────────────────────────────────────────
+function getCandidates(aiTurn, limit = 20) {
+    let candidates = [];
+    const visited = new Set();
+    for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
+        if (board[y][x] !== 0) {
+            for (let dy=-2; dy<=2; dy++) for (let dx=-2; dx<=2; dx++) {
+                const nx = x+dx, ny = y+dy;
+                const key = ny*SIZE+nx;
+                if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && board[ny][nx]===0 && !visited.has(key)) {
+                    visited.add(key);
+                    if (aiTurn === 1 && checkRenjuForbidden(nx, ny, 1)) continue;
+                    const centerBonus = (7-Math.abs(7-nx) + 7-Math.abs(7-ny)) * 5;
+                    const s = getPointBetter(nx, ny, aiTurn) * 1.2
+                            + getPointBetter(nx, ny, 3-aiTurn)
+                            + centerBonus;
+                    candidates.push({x: nx, y: ny, s});
+                }
             }
-            if (!hasNeighbor && moveHistory.length > 0) continue;
-            let centerBonus = (7-Math.abs(7-x) + 7-Math.abs(7-y)) * 5;
-            let s = getPointBetter(x, y, turn) * 1.2 + getPointBetter(x, y, 3-turn) + centerBonus;
-            candidates.push({x, y, s});
         }
     }
+    // 첫 수: 중앙
+    if (candidates.length === 0) return [{x:7, y:7, s:0}];
     candidates.sort((a,b) => b.s - a.s);
-    let searchRange = candidates.slice(0, 12);
-    for (let m of searchRange) {
+    return candidates.slice(0, limit);
+}
+
+// ─── 미니맥스 + 알파베타 (고수 depth 7) ──────────────────────────
+function getMinimaxMove(depth) {
+    const winMove = findImmediateWin(turn);     if (winMove) return winMove;
+    const threatMove = findImmediateWin(3-turn); if (threatMove) return threatMove;
+
+    let bestScore = -Infinity;
+    let bestMove  = {x: -1, y: -1};
+    const candidates = getCandidates(turn, 20);
+
+    for (let m of candidates) {
         board[m.y][m.x] = turn;
-        let score = minimax(depth - 1, -Infinity, Infinity, false);
+        const score = minimax(depth - 1, -Infinity, Infinity, false, turn);
         board[m.y][m.x] = 0;
-        if (score > bestScore) { bestScore = score; move = m; }
+        if (score > bestScore) { bestScore = score; bestMove = m; }
     }
-    return move;
+    return bestMove;
 }
 
 function findImmediateWin(t) {
     for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
         if(board[y][x]===0) {
             if(t===1 && checkRenjuForbidden(x,y,1)) continue;
-            if(checkWinStrict(x,y,t)) return {x,y};
+            board[y][x] = t;
+            const win = checkWinStrict(x, y, t);
+            board[y][x] = 0;
+            if (win) return {x, y};
         }
     }
     return null;
 }
 
-function minimax(depth, alpha, beta, isMax) {
-    if (depth === 0) return evaluateBetter();
-    let currTurn = isMax ? turn : 3 - turn;
-    let candidates = [];
-    for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x] === 0) candidates.push({x, y, s: getPointBetter(x, y, currTurn)});
-    }
-    candidates.sort((a,b) => b.s - a.s);
-    let searchRange = candidates.slice(0, 5);
+function minimax(depth, alpha, beta, isMax, aiTurn) {
+    if (depth === 0) return evaluateBetter(aiTurn);
+
+    const currTurn = isMax ? aiTurn : 3 - aiTurn;
+    // 내부 탐색 후보는 깊이에 따라 줄임 (속도 vs 품질 균형)
+    const branchLimit = depth >= 5 ? 8 : depth >= 3 ? 6 : 5;
+    const candidates  = getCandidates(currTurn, branchLimit);
+
     if (isMax) {
         let maxE = -Infinity;
-        for (let m of searchRange) {
-            board[m.y][m.x] = turn;
-            if (checkWinStrict(m.x, m.y, turn)) { board[m.y][m.x]=0; return 1000000 + depth; }
-            let ev = minimax(depth-1, alpha, beta, false);
-            board[m.y][m.x] = 0; maxE = Math.max(maxE, ev); alpha = Math.max(alpha, ev);
+        for (let m of candidates) {
+            board[m.y][m.x] = currTurn;
+            if (checkWinStrict(m.x, m.y, currTurn)) {
+                board[m.y][m.x] = 0;
+                return 1000000 + depth;
+            }
+            const ev = minimax(depth-1, alpha, beta, false, aiTurn);
+            board[m.y][m.x] = 0;
+            maxE  = Math.max(maxE, ev);
+            alpha = Math.max(alpha, ev);
             if (beta <= alpha) break;
         }
         return maxE;
     } else {
         let minE = Infinity;
-        for (let m of searchRange) {
-            board[m.y][m.x] = 3 - turn;
-            if (checkWinStrict(m.x, m.y, 3-turn)) { board[m.y][m.x]=0; return -1000000 - depth; }
-            let ev = minimax(depth-1, alpha, beta, true);
-            board[m.y][m.x] = 0; minE = Math.min(minE, ev); beta = Math.min(beta, ev);
+        for (let m of candidates) {
+            board[m.y][m.x] = currTurn;
+            if (checkWinStrict(m.x, m.y, currTurn)) {
+                board[m.y][m.x] = 0;
+                return -1000000 - depth;
+            }
+            const ev = minimax(depth-1, alpha, beta, true, aiTurn);
+            board[m.y][m.x] = 0;
+            minE = Math.min(minE, ev);
+            beta = Math.min(beta, ev);
             if (beta <= alpha) break;
         }
         return minE;
     }
 }
 
-function evaluateBetter() {
+function evaluateBetter(aiTurn) {
     let score = 0;
     for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x] === turn) score += getPointBetter(x, y, turn);
-        else if(board[y][x] === 3-turn) score -= getPointBetter(x, y, 3-turn) * 1.1;
+        if(board[y][x] === aiTurn)    score += getPointBetter(x, y, aiTurn);
+        else if(board[y][x] !== 0)    score -= getPointBetter(x, y, 3-aiTurn) * 1.1;
     }
     return score;
 }
 
 function getPointBetter(x, y, t) {
-    let total = 0; const ds = [[1, 0], [0, 1], [1, 1], [1, -1]];
+    let total = 0;
+    const ds = [[1,0],[0,1],[1,1],[1,-1]];
     for (let [dx, dy] of ds) {
         let count = 1, openEnds = 0;
-        for (let i = 1; i < 5; i++) {
-            let nx = x+dx*i, ny = y+dy*i;
-            if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
-                if (board[ny][nx] === t) count++; else if (board[ny][nx] === 0) { openEnds++; break; } else break;
+        for (let i=1; i<5; i++) {
+            const nx=x+dx*i, ny=y+dy*i;
+            if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE) {
+                if (board[ny][nx]===t) count++;
+                else if (board[ny][nx]===0) { openEnds++; break; }
+                else break;
             } else break;
         }
-        for (let i = 1; i < 5; i++) {
-            let nx = x-dx*i, ny = y-dy*i;
-            if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE) {
-                if (board[ny][nx] === t) count++; else if (board[ny][nx] === 0) { openEnds++; break; } else break;
+        for (let i=1; i<5; i++) {
+            const nx=x-dx*i, ny=y-dy*i;
+            if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE) {
+                if (board[ny][nx]===t) count++;
+                else if (board[ny][nx]===0) { openEnds++; break; }
+                else break;
             } else break;
         }
-        if (count >= 5) total += 500000;
-        else if (count === 4) total += (openEnds === 2) ? 50000 : (openEnds === 1 ? 5000 : 0);
-        else if (count === 3) total += (openEnds === 2) ? 5000 : (openEnds === 1 ? 500 : 0);
-        else if (count === 2) total += (openEnds === 2) ? 500 : 0;
+        if      (count >= 5) total += 500000;
+        else if (count === 4) total += openEnds===2 ? 50000 : openEnds===1 ? 5000 : 0;
+        else if (count === 3) total += openEnds===2 ?  5000 : openEnds===1 ?  500 : 0;
+        else if (count === 2) total += openEnds===2 ?   500 : 0;
     }
     return total;
 }
 
+// ============================================================
+// ─── MCTS (불가능 단계) ───────────────────────────────────────
+// ============================================================
+
+const MCTS_C = 1.414; // UCB1 탐색 상수
+
+class MCTSNode {
+    constructor(move, parent, boardSnap, nodeTurn) {
+        this.move      = move;       // {x, y} | null (루트)
+        this.parent    = parent;
+        this.children  = [];
+        this.wins      = 0;
+        this.visits    = 0;
+        this.nodeTurn  = nodeTurn;   // 이 노드에서 방금 둔 플레이어
+        this.boardSnap = boardSnap;  // 이 노드 시점의 보드 (flat Int8Array)
+        this.untriedMoves = null;    // 아직 확장 안 한 후보수 (지연 초기화)
+    }
+
+    // UCB1 점수
+    ucb1(parentVisits) {
+        if (this.visits === 0) return Infinity;
+        return this.wins / this.visits
+             + MCTS_C * Math.sqrt(Math.log(parentVisits) / this.visits);
+    }
+
+    // 가장 유망한 자식
+    bestChild() {
+        return this.children.reduce((a, b) =>
+            b.ucb1(this.visits) > a.ucb1(this.visits) ? b : a);
+    }
+}
+
+// 보드 ↔ flat Int8Array 변환 유틸
+function boardToFlat(b) {
+    const f = new Int8Array(SIZE * SIZE);
+    for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) f[y*SIZE+x] = b[y][x];
+    return f;
+}
+function flatToBoard(f) {
+    const b = Array.from({length:SIZE}, (_,y) =>
+        Array.from({length:SIZE}, (_,x) => f[y*SIZE+x]));
+    return b;
+}
+function applyMoveFlat(f, x, y, t) {
+    const nf = f.slice();
+    nf[y*SIZE+x] = t;
+    return nf;
+}
+
+// flat 배열용 승리 판정
+function checkWinFlat(f, x, y, t) {
+    const ds = [[1,0],[0,1],[1,1],[1,-1]];
+    const get = (xx,yy) => (xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE) ? f[yy*SIZE+xx] : -1;
+    for (let [dx,dy] of ds) {
+        let cnt = 1;
+        for (let i=1; i<6; i++) { if (get(x+dx*i, y+dy*i)===t) cnt++; else break; }
+        for (let i=1; i<6; i++) { if (get(x-dx*i, y-dy*i)===t) cnt++; else break; }
+        if (t===1 && cnt===5) return true;
+        if (t===2 && cnt>=5)  return true;
+    }
+    return false;
+}
+
+// flat 배열용 렌주 금수 (빠른 버전: 장륙만 체크, 33/44는 롤아웃에서 생략)
+function isWinMoveFlat(f, x, y, t) {
+    const nf = applyMoveFlat(f, x, y, t);
+    return checkWinFlat(nf, x, y, t);
+}
+
+// flat 보드에서 후보수 생성 (빠른 버전)
+function getCandidatesFlat(f, t, limit=15) {
+    const get = (xx,yy) => (xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE) ? f[yy*SIZE+xx] : -1;
+    const visited = new Uint8Array(SIZE*SIZE);
+    const cands = [];
+    for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
+        if (f[y*SIZE+x] !== 0) {
+            for (let dy=-2; dy<=2; dy++) for (let dx=-2; dx<=2; dx++) {
+                const nx=x+dx, ny=y+dy, key=ny*SIZE+nx;
+                if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE && f[key]===0 && !visited[key]) {
+                    visited[key] = 1;
+                    // 간단 점수 계산
+                    let s = 0;
+                    const ds2 = [[1,0],[0,1],[1,1],[1,-1]];
+                    for (let [ddx,ddy] of ds2) {
+                        let c1=0,c2=0;
+                        for(let i=1;i<5;i++){if(get(nx+ddx*i,ny+ddy*i)===t)c1++;else break;}
+                        for(let i=1;i<5;i++){if(get(nx-ddx*i,ny-ddy*i)===t)c1++;else break;}
+                        for(let i=1;i<5;i++){if(get(nx+ddx*i,ny+ddy*i)===3-t)c2++;else break;}
+                        for(let i=1;i<5;i++){if(get(nx-ddx*i,ny-ddy*i)===3-t)c2++;else break;}
+                        s += c1*c1*10 + c2*c2*5;
+                    }
+                    cands.push({x:nx, y:ny, s});
+                }
+            }
+        }
+    }
+    if (cands.length === 0) return [{x:7, y:7}];
+    cands.sort((a,b)=>b.s-a.s);
+    return cands.slice(0, limit);
+}
+
+// 롤아웃: 랜덤 + 휴리스틱 혼합 플레이아웃
+function rollout(f, startTurn, aiTurn, maxDepth=30) {
+    let cur = f.slice();
+    let t = startTurn;
+    for (let d=0; d<maxDepth; d++) {
+        const cands = getCandidatesFlat(cur, t, 8);
+        // 즉시 승리수 있으면 바로 둠
+        let move = null;
+        for (let m of cands) {
+            if (isWinMoveFlat(cur, m.x, m.y, t)) { move=m; break; }
+        }
+        if (!move) move = cands[Math.floor(Math.random()*Math.min(cands.length,5))];
+        cur = applyMoveFlat(cur, move.x, move.y, t);
+        if (checkWinFlat(cur, move.x, move.y, t)) {
+            return t === aiTurn ? 1 : 0;
+        }
+        t = 3 - t;
+    }
+    // 종료 전 평가 (점수 기반 무승부 처리)
+    let aiScore=0, oppScore=0;
+    const ds3=[[1,0],[0,1],[1,1],[1,-1]];
+    const get=(xx,yy)=>(xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE)?cur[yy*SIZE+xx]:-1;
+    for(let y=0;y<SIZE;y++) for(let x=0;x<SIZE;x++){
+        if(cur[y*SIZE+x]===aiTurn){
+            for(let[dx,dy]of ds3){let c=1;for(let i=1;i<5;i++){if(get(x+dx*i,y+dy*i)===aiTurn)c++;else break;}aiScore+=c*c;}
+        } else if(cur[y*SIZE+x]!==0){
+            for(let[dx,dy]of ds3){let c=1;for(let i=1;i<5;i++){if(get(x+dx*i,y+dy*i)===3-aiTurn)c++;else break;}oppScore+=c*c;}
+        }
+    }
+    if (aiScore > oppScore) return 0.6;
+    if (aiScore < oppScore) return 0.4;
+    return 0.5;
+}
+
+// MCTS 메인 함수 (timeLimitMs 밀리초 동안 반복)
+function getMCTSMove(timeLimitMs = 1200) {
+    const aiTurn = turn;
+
+    // 즉시 승리/방어
+    const winMove = findImmediateWin(aiTurn);     if (winMove) return winMove;
+    const block   = findImmediateWin(3 - aiTurn); if (block)   return block;
+
+    const rootFlat = boardToFlat(board);
+    const root = new MCTSNode(null, null, rootFlat, 3 - aiTurn); // 루트: 상대가 방금 둔 상태
+
+    const deadline = Date.now() + timeLimitMs;
+    let iters = 0;
+
+    while (Date.now() < deadline) {
+        // 1. Selection
+        let node = root;
+        let f    = root.boardSnap.slice();
+        let t    = aiTurn; // 루트의 다음 차례 = AI
+
+        while (node.children.length > 0 && getUntriedMoves(node, f, t).length === 0) {
+            node = node.bestChild();
+            f    = node.boardSnap;
+            t    = 3 - node.nodeTurn;
+        }
+
+        // 2. Expansion
+        const untried = getUntriedMoves(node, f, t);
+        if (untried.length > 0) {
+            const idx  = Math.floor(Math.random() * untried.length);
+            const move = untried.splice(idx, 1)[0];
+            node.untriedMoves = untried;
+
+            const nf   = applyMoveFlat(f, move.x, move.y, t);
+            const child = new MCTSNode(move, node, nf, t);
+            node.children.push(child);
+            node = child;
+            f    = nf;
+            t    = 3 - t;
+        }
+
+        // 3. Simulation (rollout)
+        const result = rollout(f, t, aiTurn, 25);
+
+        // 4. Backpropagation
+        let cur = node;
+        while (cur) {
+            cur.visits++;
+            // nodeTurn이 aiTurn이면 AI가 둔 수 → 이겼을 때 wins 증가
+            if (cur.nodeTurn === aiTurn) cur.wins += result;
+            else                         cur.wins += (1 - result);
+            cur = cur.parent;
+        }
+        iters++;
+    }
+
+    // 가장 많이 방문한 자식 선택 (가장 신뢰도 높음)
+    if (root.children.length === 0) return getBestMoveHeuristic(0.9, false);
+    const best = root.children.reduce((a,b) => b.visits > a.visits ? b : a);
+    return best.move;
+}
+
+// untriedMoves 지연 초기화
+function getUntriedMoves(node, f, t) {
+    if (node.untriedMoves === null) {
+        node.untriedMoves = getCandidatesFlat(f, t, 15);
+    }
+    return node.untriedMoves;
+}
+
+// ============================================================
 // --- 기보 관리 ---
+// ============================================================
 function saveHistory(w, reason){
     let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
     h.unshift({
@@ -758,8 +1002,7 @@ function renderWinRate() {
     pctEl.textContent = `승률 ${pct}%`;
 }
 
-// ─── 게임 세션 저장/복원 (localStorage) ──────────────────────────
-
+// ─── 게임 세션 저장/복원 ──────────────────────────────────────────
 function saveGameSession() {
     if (isGameOver || moveHistory.length === 0) {
         localStorage.removeItem("omok_live_session");
@@ -846,7 +1089,6 @@ function checkOrphanSession() {
         z-index:20000; padding:20px;
     `;
 
-    // DOM에 먼저 추가한 뒤 내용 렌더링
     document.body.appendChild(overlay);
     renderMain();
 
