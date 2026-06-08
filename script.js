@@ -1,11 +1,13 @@
 // --- 전역 변수 및 초기화 ---
 let mode = "ai", level = "easy", board = [], turn = 1, isGameOver = false, lastMove = null, playerColor = 1;
 let currentLimit = 20, timerInterval, moveHistory = [], endReason = "";
-let undoCounts = { 1: 0, 2: 0 }; 
+let undoCounts = { 1: 0, 2: 0 };
 let statusTimeout = null;
-let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct"; 
+let placeMode = localStorage.getItem("omok_settings_placeMode") || "direct";
 let tempMove = null;
 let aiTimeout = null;
+let isAiThinking = false; // [FIX #1 / 현재버그] AI 턴 잠금 플래그
+let inputCooldownUntil = 0;  // [FIX 현재버그] 오버레이 탭 이벤트 전파 차단용 타임스탬프
 let deferredPrompt = null;
 
 const SIZE = 15;
@@ -17,21 +19,22 @@ const cell = 600 / 16;
 function startGame() {
     if (aiTimeout) clearTimeout(aiTimeout);
     if (timerInterval) clearInterval(timerInterval);
-    
+
     board = Array.from({ length: SIZE }, () => Array(SIZE).fill(0));
-    moveHistory = []; 
-    isGameOver = false; 
-    turn = 1; 
-    endReason = ""; 
-    undoCounts = { 1: 0, 2: 0 }; 
+    moveHistory = [];
+    isGameOver = false;
+    turn = 1;
+    endReason = "";
+    undoCounts = { 1: 0, 2: 0 };
     tempMove = null;
     lastMove = null;
+    isAiThinking = false; // [FIX #1] 초기화
 
     document.getElementById("startModal").style.display = "none";
     document.getElementById("mainGoBtn").style.display = "none";
     document.getElementById("confirmPlaceBtn").style.display = "none";
     document.getElementById("finishConfirmModal").style.display = "none";
-    
+
     const isImp = (level === 'impossible' && mode === 'ai');
     const ub = document.getElementById("undoBtn");
     if (ub) {
@@ -39,21 +42,21 @@ function startGame() {
         ub.disabled = isImp;
         ub.innerText = isImp ? "무르기 불가" : "무르기";
     }
-    
+
     const gb = document.getElementById("giveUpBtn");
     if (gb) gb.style.display = "block";
-    
+
     draw();
-    startTurn(); 
+    startTurn();
 }
 
 // --- UI 업데이트 로직 ---
 function updateUI() {
     const isImp = (level === 'impossible' && mode === 'ai');
-    
+
     document.getElementById("aiBtn")?.classList.toggle("active", mode === 'ai');
     document.getElementById("friendBtn")?.classList.toggle("active", mode === 'friend');
-    
+
     const aiOpts = document.getElementById("aiOptions");
     if (aiOpts) {
         if (mode === 'friend') aiOpts.style.opacity = "0.3";
@@ -61,17 +64,15 @@ function updateUI() {
     }
 
     const sb = document.getElementById("startBtn");
-    if(sb) sb.style.background = isImp ? "var(--impossible)" : "var(--dark)";
-    
+    if (sb) sb.style.background = isImp ? "var(--impossible)" : "var(--dark)";
+
     document.getElementById("colorBlack")?.classList.toggle("active", playerColor === 1);
     document.getElementById("colorWhite")?.classList.toggle("active", playerColor === 2);
 
     ['easy', 'medium', 'hard', 'impossible'].forEach(l => {
         const id = l === 'medium' ? 'midBtn' : l === 'impossible' ? 'impBtn' : l + 'Btn';
         const el = document.getElementById(id);
-        if (el) {
-            el.classList.toggle("active", level === l);
-        }
+        if (el) el.classList.toggle("active", level === l);
     });
 
     document.getElementById("directModeBtn")?.classList.toggle("active", placeMode === 'direct');
@@ -95,7 +96,7 @@ function draw() {
     [4, 8, 12].forEach(y => [4, 8, 12].forEach(x => {
         ctx.beginPath(); ctx.arc(x * cell, y * cell, 4, 0, Math.PI * 2); ctx.fillStyle = "#4a3419"; ctx.fill();
     }));
-    
+
     for (let y = 0; y < SIZE; y++) {
         for (let x = 0; x < SIZE; x++) {
             if (board[y][x]) drawStone(x, y, board[y][x]);
@@ -142,7 +143,7 @@ function startTurn() {
             if (currentLimit <= 0) { clearInterval(timerInterval); endByTimeout(); }
         }, 1000);
     } else updateTimerUI();
-    
+
     updateStatus();
     if (mode === "ai" && turn !== playerColor && !isGameOver) triggerAi();
 }
@@ -152,7 +153,7 @@ function updateStatus(msg, isPriority = false) {
     const s = document.getElementById("status");
     if (!s) return;
     if (isGameOver && !msg) return;
-    
+
     s.classList.remove("thinking");
 
     if (msg) {
@@ -162,7 +163,7 @@ function updateStatus(msg, isPriority = false) {
     }
 
     if (mode === "ai" && turn !== playerColor) {
-        s.innerText = "AI 생각 중..."; 
+        s.innerText = "AI 생각 중...";
         s.classList.add("thinking");
     } else {
         s.innerText = (turn === 1 ? "흑 차례" : "백 차례");
@@ -174,11 +175,11 @@ function updateTimerUI() {
     for (let i = 1; i <= 2; i++) {
         const tEl = document.getElementById(`timer${i}`);
         if (!tEl) continue;
-        
+
         const isCurrentTurn = (turn === i);
         tEl.style.opacity = "1";
-        tEl.style.color = "#fff"; 
-        
+        tEl.style.color = "#fff";
+
         if (isCurrentTurn) {
             tEl.style.fontWeight = "bold";
             if (isImp) {
@@ -196,24 +197,27 @@ function updateTimerUI() {
 
 // --- 입력 처리 ---
 function handleInput(e) {
-    if (isGameOver || (mode === "ai" && (turn !== playerColor || aiTimeout))) return;
+    // [FIX 현재버그] 오버레이 탭이 canvas로 전파되는 이벤트 차단 (쿨다운)
+    if (Date.now() < inputCooldownUntil) return;
+    // [FIX #1] isAiThinking 플래그로 AI 턴 중 완전 차단
+    if (isGameOver || (mode === "ai" && (turn !== playerColor || isAiThinking))) return;
 
     const rect = c.getBoundingClientRect();
     const cX = e.touches ? e.touches[0].clientX : e.clientX;
     const cY = e.touches ? e.touches[0].clientY : e.clientY;
-    
+
     const scaleX = c.width / rect.width;
     const scaleY = c.height / rect.height;
-    
+
     const x = Math.round(((cX - rect.left) * scaleX) / cell) - 1;
     const y = Math.round(((cY - rect.top) * scaleY) / cell) - 1;
 
     if (x >= 0 && x < SIZE && y >= 0 && y < SIZE && board[y][x] === 0) {
         const forbidden = checkRenjuForbidden(x, y, turn);
-        if (forbidden) { 
-            showToast(`⚠️ ${forbidden} (흑 금수)`); 
-            updateStatus(`⚠️ ${forbidden}`, true); 
-            return; 
+        if (forbidden) {
+            showToast(`⚠️ ${forbidden} (흑 금수)`);
+            updateStatus(`⚠️ ${forbidden}`, true);
+            return;
         }
 
         if (placeMode === "direct") {
@@ -227,10 +231,11 @@ function handleInput(e) {
 }
 
 function finalConfirmPlace() {
-    if (!tempMove || isGameOver) return;
+    // [FIX #4] AI 생각 중이면 착수 불가
+    if (!tempMove || isGameOver || isAiThinking) return;
     const forbidden = checkRenjuForbidden(tempMove.x, tempMove.y, turn);
     if (forbidden) { updateStatus(`⚠️ ${forbidden}`, true); return; }
-    
+
     placeStone(tempMove.x, tempMove.y);
     tempMove = null;
     document.getElementById("confirmPlaceBtn").style.display = "none";
@@ -243,42 +248,43 @@ c.addEventListener('touchstart', (e) => {
 }, { passive: false });
 
 function placeStone(x, y) {
-    board[y][x] = turn; 
-    lastMove = { x, y }; 
+    board[y][x] = turn;
+    lastMove = { x, y };
     moveHistory.push({ x, y, p: turn });
     saveGameSession();
     draw();
-    
-    if (checkWinStrict(x, y, turn)) { 
-        endGame(turn); 
-        return; 
+
+    if (checkWinStrict(x, y, turn)) {
+        endGame(turn);
+        return;
     }
-    
+
     if (moveHistory.length === SIZE * SIZE) {
-        isGameOver = true; 
+        isGameOver = true;
         if (timerInterval) clearInterval(timerInterval);
         clearGameSession();
         document.getElementById("finishResultText").innerText = "무승부";
         document.getElementById("finishConfirmModal").style.display = "flex";
         return;
     }
-    
-    turn = 3 - turn; 
+
+    turn = 3 - turn;
     startTurn();
 }
 
 // --- 게임 종료 및 제어 ---
 function endGame(w) {
     clearGameSession();
-    isGameOver = true; 
-    if (timerInterval) clearInterval(timerInterval); 
+    isGameOver = true;
+    isAiThinking = false; // [FIX #1] 게임 종료 시 잠금 해제
+    if (timerInterval) clearInterval(timerInterval);
     endReason = "정상종료";
     saveHistory(w, "정상종료");
     renderWinRate();
-    
+
     document.getElementById("finishResultText").innerText = (w === 1 ? '흑' : '백') + " 승리!";
     document.getElementById("finishConfirmModal").style.display = "flex";
-    
+
     if (typeof confetti === 'function' && (w === playerColor || mode !== 'ai')) {
         confetti({ particleCount: 150, spread: 70, origin: { y: 0.6 } });
     }
@@ -286,8 +292,10 @@ function endGame(w) {
 
 function endByTimeout() {
     clearGameSession();
-    const winner = 3 - turn; 
-    isGameOver = true; 
+    const winner = 3 - turn;
+    isGameOver = true;
+    isAiThinking = false; // [FIX #1] 잠금 해제
+    if (timerInterval) clearInterval(timerInterval); // [FIX #6] 누락된 clearInterval 추가
     endReason = "시간패";
     document.getElementById("finishResultText").innerText = (turn === 1 ? "흑" : "백") + " 시간초과 패배!";
     document.getElementById("finishConfirmModal").style.display = "flex";
@@ -299,6 +307,8 @@ function handleGiveUp() {
     clearGameSession();
     if (isGameOver) return;
     isGameOver = true;
+    isAiThinking = false; // [FIX #1] 잠금 해제
+    if (timerInterval) clearInterval(timerInterval);
     endReason = "기권패";
 
     const loser  = (mode === 'ai') ? playerColor : turn;
@@ -314,7 +324,10 @@ function handleGiveUp() {
 function undo() {
     if (moveHistory.length === 0 || isGameOver) return;
     if (level === 'impossible' && mode === 'ai') return;
+
+    // [FIX #3] AI 타임아웃 취소 및 잠금 해제로 이중 착수 방지
     if (aiTimeout) { clearTimeout(aiTimeout); aiTimeout = null; }
+    isAiThinking = false;
 
     let stepsToRemove = (mode === "ai") ? 2 : 1;
     if (mode === "ai" && moveHistory.length < 2) stepsToRemove = 1;
@@ -380,30 +393,30 @@ function closeActionConfirm() { document.getElementById("actionConfirmModal").st
 // --- 렌주룰 및 승리 판정 ---
 function checkWinStrict(x, y, t) {
     const ds = [[1,0],[0,1],[1,1],[1,-1]];
-    for(let [dx, dy] of ds) {
+    for (let [dx, dy] of ds) {
         let count = 1;
-        for(let i=1; i<6; i++) if(board[y+dy*i]?.[x+dx*i]===t) count++; else break;
-        for(let i=1; i<6; i++) if(board[y-dy*i]?.[x-dx*i]===t) count++; else break;
-        if (t === 1 && count === 5) return true; 
-        if (t === 2 && count >= 5) return true;  
+        for (let i=1; i<6; i++) if (board[y+dy*i]?.[x+dx*i]===t) count++; else break;
+        for (let i=1; i<6; i++) if (board[y-dy*i]?.[x-dx*i]===t) count++; else break;
+        if (t === 1 && count === 5) return true;
+        if (t === 2 && count >= 5) return true;
     }
     return false;
 }
 
 function checkRenjuForbidden(x, y, t) {
-    if (t !== 1) return false; 
-    if (checkWinStrict(x, y, 1)) return false; 
+    if (t !== 1) return false;
+    if (checkWinStrict(x, y, 1)) return false;
 
     board[y][x] = 1;
     const ds = [[1,0],[0,1],[1,1],[1,-1]];
-    for(let [dx, dy] of ds) {
+    for (let [dx, dy] of ds) {
         let count = 1;
-        for(let i=1; i<10; i++) if(board[y+dy*i]?.[x+dx*i]===1) count++; else break;
-        for(let i=1; i<10; i++) if(board[y-dy*i]?.[x-dx*i]===1) count++; else break;
-        if(count > 5) { board[y][x] = 0; return "장륙 금수"; }
+        for (let i=1; i<10; i++) if (board[y+dy*i]?.[x+dx*i]===1) count++; else break;
+        for (let i=1; i<10; i++) if (board[y-dy*i]?.[x-dx*i]===1) count++; else break;
+        if (count > 5) { board[y][x] = 0; return "장륙 금수"; }
     }
     let fourCount = 0, openThreeCount = 0;
-    for(let [dx, dy] of ds) {
+    for (let [dx, dy] of ds) {
         if (isRealFour(x, y, dx, dy, 1)) fourCount++;
         if (isRealOpenThree(x, y, dx, dy, 1)) openThreeCount++;
     }
@@ -415,7 +428,7 @@ function checkRenjuForbidden(x, y, t) {
 
 function isRealFour(x, y, dx, dy, t) {
     let count = 0;
-    for(let i=-4; i<=4; i++) {
+    for (let i=-4; i<=4; i++) {
         let nx = x+dx*i, ny = y+dy*i;
         if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && (board[ny][nx] === 0 || (nx===x && ny===y))) {
             let temp = board[ny][nx]; board[ny][nx] = t;
@@ -428,7 +441,7 @@ function isRealFour(x, y, dx, dy, t) {
 
 function isRealOpenThree(x, y, dx, dy, t) {
     let foundOpenFour = false;
-    for(let i=-4; i<=4; i++) {
+    for (let i=-4; i<=4; i++) {
         let nx = x+dx*i, ny = y+dy*i;
         if (nx>=0 && nx<SIZE && ny>=0 && ny<SIZE && board[ny][nx] === 0 && !(nx===x && ny===y)) {
             board[ny][nx] = t;
@@ -442,8 +455,8 @@ function isRealOpenThree(x, y, dx, dy, t) {
 
 function isOpenFour(x, y, dx, dy, t) {
     let count = 1, leftIdx = 1, rightIdx = 1;
-    while(board[y+dy*leftIdx]?.[x+dx*leftIdx]===t) { count++; leftIdx++; }
-    while(board[y-dy*rightIdx]?.[x-dx*rightIdx]===t) { count++; rightIdx++; }
+    while (board[y+dy*leftIdx]?.[x+dx*leftIdx]===t) { count++; leftIdx++; }
+    while (board[y-dy*rightIdx]?.[x-dx*rightIdx]===t) { count++; rightIdx++; }
     if (count === 4) {
         let p1 = board[y+dy*leftIdx]?.[x+dx*leftIdx];
         let p2 = board[y-dy*rightIdx]?.[x-dx*rightIdx];
@@ -458,15 +471,19 @@ function isOpenFour(x, y, dx, dy, t) {
 
 function triggerAi() {
     if (isGameOver) return;
+    isAiThinking = true; // [FIX #1 / 현재버그] setTimeout 예약 즉시 잠금
     const min = 600, max = 1500;
     const delay = Math.random() * (max - min) + min;
     aiTimeout = setTimeout(() => {
+        // 게임이 이미 종료된 경우 (무르기 등) 실행 취소
+        if (isGameOver || !isAiThinking) { aiTimeout = null; isAiThinking = false; return; }
+
         let best;
-        switch(level) {
+        switch (level) {
             case 'easy':       best = getBestMoveHeuristic(0.5, true);  break;
             case 'medium':     best = getBestMoveHeuristic(0.9, false); break;
-            case 'hard':       best = getMinimaxMove(7);                break;  // ★ depth 7
-            case 'impossible': best = getMCTSMove(1200);                break;  // ★ MCTS 1.2초
+            case 'hard':       best = getMinimaxMove(7);                break;
+            case 'impossible': best = getMCTSMove(1200);                break;
         }
         if (best && best.x !== -1) {
             if (turn === 1 && checkRenjuForbidden(best.x, best.y, 1)) {
@@ -475,6 +492,7 @@ function triggerAi() {
             placeStone(best.x, best.y);
         }
         aiTimeout = null;
+        isAiThinking = false; // [FIX #1] 착수 완료 후 잠금 해제
     }, delay);
 }
 
@@ -513,7 +531,6 @@ function getCandidates(aiTurn, limit = 20) {
             }
         }
     }
-    // 첫 수: 중앙
     if (candidates.length === 0) return [{x:7, y:7, s:0}];
     candidates.sort((a,b) => b.s - a.s);
     return candidates.slice(0, limit);
@@ -521,7 +538,7 @@ function getCandidates(aiTurn, limit = 20) {
 
 // ─── 미니맥스 + 알파베타 (고수 depth 7) ──────────────────────────
 function getMinimaxMove(depth) {
-    const winMove = findImmediateWin(turn);     if (winMove) return winMove;
+    const winMove = findImmediateWin(turn);      if (winMove) return winMove;
     const threatMove = findImmediateWin(3-turn); if (threatMove) return threatMove;
 
     let bestScore = -Infinity;
@@ -538,9 +555,9 @@ function getMinimaxMove(depth) {
 }
 
 function findImmediateWin(t) {
-    for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x]===0) {
-            if(t===1 && checkRenjuForbidden(x,y,1)) continue;
+    for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
+        if (board[y][x]===0) {
+            if (t===1 && checkRenjuForbidden(x, y, 1)) continue;
             board[y][x] = t;
             const win = checkWinStrict(x, y, t);
             board[y][x] = 0;
@@ -554,7 +571,6 @@ function minimax(depth, alpha, beta, isMax, aiTurn) {
     if (depth === 0) return evaluateBetter(aiTurn);
 
     const currTurn = isMax ? aiTurn : 3 - aiTurn;
-    // 내부 탐색 후보는 깊이에 따라 줄임 (속도 vs 품질 균형)
     const branchLimit = depth >= 5 ? 8 : depth >= 3 ? 6 : 5;
     const candidates  = getCandidates(currTurn, branchLimit);
 
@@ -593,9 +609,9 @@ function minimax(depth, alpha, beta, isMax, aiTurn) {
 
 function evaluateBetter(aiTurn) {
     let score = 0;
-    for(let y=0; y<SIZE; y++) for(let x=0; x<SIZE; x++) {
-        if(board[y][x] === aiTurn)    score += getPointBetter(x, y, aiTurn);
-        else if(board[y][x] !== 0)    score -= getPointBetter(x, y, 3-aiTurn) * 1.1;
+    for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) {
+        if (board[y][x] === aiTurn)   score += getPointBetter(x, y, aiTurn);
+        else if (board[y][x] !== 0)   score -= getPointBetter(x, y, 3-aiTurn) * 1.1;
     }
     return score;
 }
@@ -633,52 +649,44 @@ function getPointBetter(x, y, t) {
 // ─── MCTS (불가능 단계) ───────────────────────────────────────
 // ============================================================
 
-const MCTS_C = 1.414; // UCB1 탐색 상수
+const MCTS_C = 1.414;
 
 class MCTSNode {
     constructor(move, parent, boardSnap, nodeTurn) {
-        this.move      = move;       // {x, y} | null (루트)
+        this.move      = move;
         this.parent    = parent;
         this.children  = [];
         this.wins      = 0;
         this.visits    = 0;
-        this.nodeTurn  = nodeTurn;   // 이 노드에서 방금 둔 플레이어
-        this.boardSnap = boardSnap;  // 이 노드 시점의 보드 (flat Int8Array)
-        this.untriedMoves = null;    // 아직 확장 안 한 후보수 (지연 초기화)
+        this.nodeTurn  = nodeTurn;
+        this.boardSnap = boardSnap;
+        this.untriedMoves = null;
     }
 
-    // UCB1 점수
     ucb1(parentVisits) {
         if (this.visits === 0) return Infinity;
         return this.wins / this.visits
              + MCTS_C * Math.sqrt(Math.log(parentVisits) / this.visits);
     }
 
-    // 가장 유망한 자식
     bestChild() {
         return this.children.reduce((a, b) =>
             b.ucb1(this.visits) > a.ucb1(this.visits) ? b : a);
     }
 }
 
-// 보드 ↔ flat Int8Array 변환 유틸
 function boardToFlat(b) {
     const f = new Int8Array(SIZE * SIZE);
     for (let y=0; y<SIZE; y++) for (let x=0; x<SIZE; x++) f[y*SIZE+x] = b[y][x];
     return f;
 }
-function flatToBoard(f) {
-    const b = Array.from({length:SIZE}, (_,y) =>
-        Array.from({length:SIZE}, (_,x) => f[y*SIZE+x]));
-    return b;
-}
+
 function applyMoveFlat(f, x, y, t) {
     const nf = f.slice();
     nf[y*SIZE+x] = t;
     return nf;
 }
 
-// flat 배열용 승리 판정
 function checkWinFlat(f, x, y, t) {
     const ds = [[1,0],[0,1],[1,1],[1,-1]];
     const get = (xx,yy) => (xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE) ? f[yy*SIZE+xx] : -1;
@@ -692,13 +700,44 @@ function checkWinFlat(f, x, y, t) {
     return false;
 }
 
-// flat 배열용 렌주 금수 (빠른 버전: 장륙만 체크, 33/44는 롤아웃에서 생략)
+// [FIX #2] flat 보드용 렌주 금수 체크 (MCTS에서 흑 AI일 때 금수 자리 방지)
+function checkRenjuForbiddenFlat(f, x, y) {
+    const get = (xx, yy) => (xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE) ? f[yy*SIZE+xx] : -1;
+    // 이미 5목이 되는 자리면 금수 아님 (승리수)
+    const testF = f.slice();
+    testF[y*SIZE+x] = 1;
+    if (checkWinFlat(testF, x, y, 1)) return false;
+
+    // 장륙 체크
+    const ds = [[1,0],[0,1],[1,1],[1,-1]];
+    for (let [dx, dy] of ds) {
+        let count = 1;
+        for (let i=1; i<10; i++) { if (get(x+dx*i, y+dy*i)===1 || (x+dx*i===x && y+dy*i===y)) { if(testF[(y+dy*i)*SIZE+(x+dx*i)]===1) count++; else break; } else break; }
+        for (let i=1; i<10; i++) { if (get(x-dx*i, y-dy*i)===1 || (x-dx*i===x && y-dy*i===y)) { if(testF[(y-dy*i)*SIZE+(x-dx*i)]===1) count++; else break; } else break; }
+        // 실제 연속 개수 직접 계산
+    }
+    // 간단하게: testF 기준으로 방향별 연속 수 계산
+    for (let [dx, dy] of ds) {
+        let count = 1;
+        for (let i=1; i<10; i++) {
+            const nx=x+dx*i, ny=y+dy*i;
+            if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&testF[ny*SIZE+nx]===1) count++; else break;
+        }
+        for (let i=1; i<10; i++) {
+            const nx=x-dx*i, ny=y-dy*i;
+            if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE&&testF[ny*SIZE+nx]===1) count++; else break;
+        }
+        if (count > 5) return true; // 장륙 금수
+    }
+    return false; // 33/44는 롤아웃 성능상 생략 (장륙만 체크)
+}
+
 function isWinMoveFlat(f, x, y, t) {
     const nf = applyMoveFlat(f, x, y, t);
     return checkWinFlat(nf, x, y, t);
 }
 
-// flat 보드에서 후보수 생성 (빠른 버전)
+// [FIX #2] getCandidatesFlat에 흑 금수 필터 추가
 function getCandidatesFlat(f, t, limit=15) {
     const get = (xx,yy) => (xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE) ? f[yy*SIZE+xx] : -1;
     const visited = new Uint8Array(SIZE*SIZE);
@@ -709,7 +748,8 @@ function getCandidatesFlat(f, t, limit=15) {
                 const nx=x+dx, ny=y+dy, key=ny*SIZE+nx;
                 if (nx>=0&&nx<SIZE&&ny>=0&&ny<SIZE && f[key]===0 && !visited[key]) {
                     visited[key] = 1;
-                    // 간단 점수 계산
+                    // [FIX #2] 흑(t===1)이면 금수 자리 제외
+                    if (t === 1 && checkRenjuForbiddenFlat(f, nx, ny)) continue;
                     let s = 0;
                     const ds2 = [[1,0],[0,1],[1,1],[1,-1]];
                     for (let [ddx,ddy] of ds2) {
@@ -730,13 +770,11 @@ function getCandidatesFlat(f, t, limit=15) {
     return cands.slice(0, limit);
 }
 
-// 롤아웃: 랜덤 + 휴리스틱 혼합 플레이아웃
 function rollout(f, startTurn, aiTurn, maxDepth=30) {
     let cur = f.slice();
     let t = startTurn;
     for (let d=0; d<maxDepth; d++) {
         const cands = getCandidatesFlat(cur, t, 8);
-        // 즉시 승리수 있으면 바로 둠
         let move = null;
         for (let m of cands) {
             if (isWinMoveFlat(cur, m.x, m.y, t)) { move=m; break; }
@@ -748,7 +786,6 @@ function rollout(f, startTurn, aiTurn, maxDepth=30) {
         }
         t = 3 - t;
     }
-    // 종료 전 평가 (점수 기반 무승부 처리)
     let aiScore=0, oppScore=0;
     const ds3=[[1,0],[0,1],[1,1],[1,-1]];
     const get=(xx,yy)=>(xx>=0&&xx<SIZE&&yy>=0&&yy<SIZE)?cur[yy*SIZE+xx]:-1;
@@ -764,25 +801,21 @@ function rollout(f, startTurn, aiTurn, maxDepth=30) {
     return 0.5;
 }
 
-// MCTS 메인 함수 (timeLimitMs 밀리초 동안 반복)
 function getMCTSMove(timeLimitMs = 1200) {
     const aiTurn = turn;
 
-    // 즉시 승리/방어
     const winMove = findImmediateWin(aiTurn);     if (winMove) return winMove;
     const block   = findImmediateWin(3 - aiTurn); if (block)   return block;
 
     const rootFlat = boardToFlat(board);
-    const root = new MCTSNode(null, null, rootFlat, 3 - aiTurn); // 루트: 상대가 방금 둔 상태
+    const root = new MCTSNode(null, null, rootFlat, 3 - aiTurn);
 
     const deadline = Date.now() + timeLimitMs;
-    let iters = 0;
 
     while (Date.now() < deadline) {
-        // 1. Selection
         let node = root;
         let f    = root.boardSnap.slice();
-        let t    = aiTurn; // 루트의 다음 차례 = AI
+        let t    = aiTurn;
 
         while (node.children.length > 0 && getUntriedMoves(node, f, t).length === 0) {
             node = node.bestChild();
@@ -790,12 +823,12 @@ function getMCTSMove(timeLimitMs = 1200) {
             t    = 3 - node.nodeTurn;
         }
 
-        // 2. Expansion
         const untried = getUntriedMoves(node, f, t);
         if (untried.length > 0) {
             const idx  = Math.floor(Math.random() * untried.length);
-            const move = untried.splice(idx, 1)[0];
-            node.untriedMoves = untried;
+            const move = untried[idx];
+            // [FIX #8] splice 대신 인덱스 제거로 원본 참조 돌연변이 방지
+            node.untriedMoves = untried.filter((_, i) => i !== idx);
 
             const nf   = applyMoveFlat(f, move.x, move.y, t);
             const child = new MCTSNode(move, node, nf, t);
@@ -805,28 +838,23 @@ function getMCTSMove(timeLimitMs = 1200) {
             t    = 3 - t;
         }
 
-        // 3. Simulation (rollout)
         const result = rollout(f, t, aiTurn, 25);
 
-        // 4. Backpropagation
         let cur = node;
         while (cur) {
             cur.visits++;
-            // nodeTurn이 aiTurn이면 AI가 둔 수 → 이겼을 때 wins 증가
             if (cur.nodeTurn === aiTurn) cur.wins += result;
             else                         cur.wins += (1 - result);
             cur = cur.parent;
         }
-        iters++;
     }
 
-    // 가장 많이 방문한 자식 선택 (가장 신뢰도 높음)
     if (root.children.length === 0) return getBestMoveHeuristic(0.9, false);
     const best = root.children.reduce((a,b) => b.visits > a.visits ? b : a);
     return best.move;
 }
 
-// untriedMoves 지연 초기화
+// [FIX #8] getUntriedMoves: 항상 복사본 반환으로 참조 공유 방지
 function getUntriedMoves(node, f, t) {
     if (node.untriedMoves === null) {
         node.untriedMoves = getCandidatesFlat(f, t, 15);
@@ -837,8 +865,8 @@ function getUntriedMoves(node, f, t) {
 // ============================================================
 // --- 기보 관리 ---
 // ============================================================
-function saveHistory(w, reason){
-    let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
+function saveHistory(w, reason) {
+    let h = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
     h.unshift({
         date: new Date().toLocaleString(),
         winner: w === 1 ? '흑' : '백',
@@ -850,64 +878,112 @@ function saveHistory(w, reason){
         playerColor: playerColor,
         playerWon: (mode === 'ai') ? (w === playerColor) : null
     });
-    localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0,5)));
+    localStorage.setItem("omok_final_history", JSON.stringify(h.slice(0, 5)));
 }
 
-function showHistory(){
-    let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-    let list=document.getElementById("historyList"); if(!list) return;
-    list.innerHTML=h.length?"":"<p style='color:#999;text-align:center;'>기록 없음</p>";
-    h.forEach((item, idx)=>{
+function showHistory() {
+    let h = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
+    let list = document.getElementById("historyList"); if (!list) return;
+    list.innerHTML = h.length ? "" : "<p style='color:#999;text-align:center;'>기록 없음</p>";
+    h.forEach((item, idx) => {
         let d = item.date.includes(',') ? item.date.split(',')[1] : item.date;
         let reasonTag = (item.reason && item.reason !== "정상종료") ? `<span style="color:#ff4d4d; font-size:10px; margin-left:4px;">(${item.reason})</span>` : "";
-        list.innerHTML+=`<div class="history-item" onclick="replay(${idx})"><div><strong style="color:${item.isImp?'#8e44ad':'inherit'}">${item.winner} 승</strong>${reasonTag} (${item.moves}수)<br><small>${d}</small></div><button class="btn" style="padding:4px 8px; font-size:12px; background:#eee;" onclick="deleteHistory(event, ${idx})">삭제</button></div>`;
+        list.innerHTML += `<div class="history-item" onclick="replay(${idx})"><div><strong style="color:${item.isImp?'#8e44ad':'inherit'}">${item.winner} 승</strong>${reasonTag} (${item.moves}수)<br><small>${d}</small></div><button class="btn" style="padding:4px 8px; font-size:12px; background:#eee;" onclick="deleteHistory(event, ${idx})">삭제</button></div>`;
     });
-    document.getElementById("historyModal").style.display="flex";
+    document.getElementById("historyModal").style.display = "flex";
 }
 
-function deleteHistory(e, idx){ e.stopPropagation(); let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]"); h.splice(idx, 1); localStorage.setItem("omok_final_history", JSON.stringify(h)); renderWinRate(); showHistory(); }
+function deleteHistory(e, idx) {
+    e.stopPropagation();
+    let h = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
+    h.splice(idx, 1);
+    localStorage.setItem("omok_final_history", JSON.stringify(h));
+    renderWinRate();
+    showHistory();
+}
 
 function openDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'flex'; }
 
 function closeDeleteConfirm() { document.getElementById('deleteConfirmModal').style.display = 'none'; }
 
-function clearAllHistory(){ localStorage.removeItem("omok_final_history"); closeDeleteConfirm(); showHistory(); renderWinRate(); showToast("모든 기보가 삭제되었습니다."); }
+function clearAllHistory() {
+    localStorage.removeItem("omok_final_history");
+    closeDeleteConfirm();
+    showHistory();
+    renderWinRate();
+    showToast("모든 기보가 삭제되었습니다.");
+}
 
-function replay(idx){
-    let h=JSON.parse(localStorage.getItem("omok_final_history")||"[]");
-    let g = h[idx]; if(!g) return;
-    board = Array.from({length:SIZE},()=>Array(SIZE).fill(0));
-    moveHistory = g.data; isGameOver = true; if(timerInterval) clearInterval(timerInterval);
-    endReason = g.reason || ""; moveHistory.forEach(m => board[m.y][m.x] = m.p);
-    document.getElementById("historyModal").style.display = "none"; document.getElementById("startModal").style.display = "none";
+function replay(idx) {
+    let h = JSON.parse(localStorage.getItem("omok_final_history") || "[]");
+    let g = h[idx]; if (!g) return;
+    board = Array.from({length:SIZE}, () => Array(SIZE).fill(0));
+    moveHistory = g.data;
+    isGameOver = true;
+    turn = 1; // [FIX #5] turn 명시적 초기화로 오염 방지
+    isAiThinking = false; // [FIX #1] 잠금 해제
+    if (timerInterval) clearInterval(timerInterval);
+    endReason = g.reason || "";
+    moveHistory.forEach(m => board[m.y][m.x] = m.p);
+    document.getElementById("historyModal").style.display = "none";
+    document.getElementById("startModal").style.display = "none";
     viewFinalRecord();
 }
 
-function viewFinalRecord(){
-    document.getElementById("finishConfirmModal").style.display="none"; document.getElementById("undoBtn").style.display="none";
-    document.getElementById("giveUpBtn").style.display="none"; document.getElementById("mainGoBtn").style.display="block";
-    document.getElementById("confirmPlaceBtn").style.display="none";
-    let statusText = "복기 중: " + moveHistory.length + "수"; if(endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
-    updateStatus(statusText); draw();
+function viewFinalRecord() {
+    document.getElementById("finishConfirmModal").style.display = "none";
+    document.getElementById("undoBtn").style.display = "none";
+    document.getElementById("giveUpBtn").style.display = "none";
+    document.getElementById("mainGoBtn").style.display = "block";
+    document.getElementById("confirmPlaceBtn").style.display = "none";
+    let statusText = "복기 중: " + moveHistory.length + "수";
+    if (endReason && endReason !== "정상종료") statusText += ` (${endReason})`;
+    updateStatus(statusText);
+    draw();
 }
 
 // --- 유틸리티 및 PWA ---
 function showToast(message) {
-    const toast = document.getElementById("toast"); if(!toast) return;
+    const toast = document.getElementById("toast"); if (!toast) return;
     toast.innerText = message; toast.classList.add("show");
     setTimeout(() => { toast.classList.remove("show"); }, 2500);
 }
 
+// [FIX #9] 클립보드 복사 안정화 - 먼저 복사 시도 후 mailto 실행
 function handleEmailContact(email) {
-    const start = Date.now(); window.location.href = `mailto:${email}`;
-    setTimeout(() => { if (Date.now() - start < 1000) { navigator.clipboard.writeText(email).then(() => { showToast("📧 이메일 주소가 복사되었습니다!"); }); } }, 500);
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(email)
+            .then(() => {
+                showToast("📧 이메일 주소가 복사되었습니다!");
+                setTimeout(() => { window.location.href = `mailto:${email}`; }, 300);
+            })
+            .catch(() => {
+                // 클립보드 권한 없으면 그냥 mailto 실행
+                window.location.href = `mailto:${email}`;
+            });
+    } else {
+        window.location.href = `mailto:${email}`;
+    }
 }
 
-window.addEventListener('beforeinstallprompt', (e) => { e.preventDefault(); deferredPrompt = e; const banner = document.getElementById('install-banner'); if(banner) banner.style.display = 'flex'; });
+window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    deferredPrompt = e;
+    const banner = document.getElementById('install-banner');
+    if (banner) banner.style.display = 'flex';
+});
 
-document.getElementById('install-confirm-btn')?.addEventListener('click', async () => { if (deferredPrompt) { deferredPrompt.prompt(); deferredPrompt = null; document.getElementById('install-banner').style.display = 'none'; } });
+document.getElementById('install-confirm-btn')?.addEventListener('click', async () => {
+    if (deferredPrompt) {
+        deferredPrompt.prompt();
+        deferredPrompt = null;
+        document.getElementById('install-banner').style.display = 'none';
+    }
+});
 
-document.getElementById('install-close-btn')?.addEventListener('click', () => { document.getElementById('install-banner').style.display = 'none'; });
+document.getElementById('install-close-btn')?.addEventListener('click', () => {
+    document.getElementById('install-banner').style.display = 'none';
+});
 
 // --- 최근 5게임 승률 렌더링 ---
 function renderWinRate() {
@@ -1030,6 +1106,7 @@ function resumeGame(saved) {
     placeMode   = saved.placeMode ?? "direct";
     isGameOver  = false;
     tempMove    = null;
+    isAiThinking = false; // [FIX 현재버그] 복원 시 잠금 초기화
 
     document.getElementById("startModal").style.display = "none";
     document.getElementById("mainGoBtn").style.display = "none";
@@ -1047,7 +1124,7 @@ function resumeGame(saved) {
     if (gb) gb.style.display = "block";
 
     draw();
-    startTurn();
+    startTurn(); // → triggerAi() 내부에서 isAiThinking=true로 즉시 잠금
     showToast("이전 게임을 이어합니다!");
 }
 
@@ -1119,6 +1196,8 @@ function checkOrphanSession() {
         `;
 
         document.getElementById("orphanResume").onclick = () => {
+            // [FIX 현재버그] 이어하기 탭이 canvas touchstart로 전파되는 것을 쿨다운으로 차단
+            inputCooldownUntil = Date.now() + 500;
             overlay.remove();
             resumeGame(saved);
         };
